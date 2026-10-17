@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <link rel="icon" href="data:," />
+  <title>🍕🐾✨</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #2b1810;
+      touch-action: none;
+      font-size: 0;
+    }
+
+    #gameRoot {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    #gameCanvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: pointer;
+      touch-action: none;
+    }
+
+    /* Floating Top HUD - Pure Visual, Zero Text */
+    #topHud {
+      position: fixed;
+      top: clamp(6px, 1.4vh, 14px);
+      left: clamp(8px, 1.8vw, 18px);
+      right: clamp(8px, 1.8vw, 18px);
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: clamp(6px, 1.2vw, 14px);
+      pointer-events: none;
+    }
+
+    .hud-card {
+      background: linear-gradient(180deg, rgba(255, 248, 237, 0.95) 0%, rgba(244, 226, 198, 0.95) 100%);
+      border: 3px solid #7c4a2d;
+      border-radius: 999px;
+      box-shadow: 0 5px 14px rgba(34, 15, 6, 0.35), inset 0 2px 0 rgba(255, 255, 255, 0.85);
+      padding: clamp(4px, 0.8vh, 8px) clamp(8px, 1.4vw, 14px);
+      display: flex;
+      align-items: center;
+      gap: clamp(6px, 1vw, 12px);
+    }
+
+    /* Wave & Customer Queue Progress Pill */
+    #wavePill {
+      flex-shrink: 1;
+      min-width: 0;
+    }
+
+    #waveCrowns {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding-right: 6px;
+      border-right: 2px solid rgba(124, 74, 45, 0.25);
+    }
+
+    .wave-crown {
+      width: clamp(18px, 2.4vw, 24px);
+      height: clamp(18px, 2.4vw, 24px);
+      opacity: 0.32;
+      transform: scale(0.88);
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease, filter 0.25s ease;
+    }
+
+    .wave-crown.active {
+      opacity: 1;
+      transform: scale(1.12);
+      filter: drop-shadow(0 2px 5px rgba(245, 158, 11, 0.75));
+    }
+
+    .wave-crown.done {
+      opacity: 0.88;
+      transform: scale(0.98);
+    }
+
+    #customerPips {
+      display: flex;
+      align-items: center;
+      gap: clamp(2px, 0.45vw, 5px);
+    }
+
+    .cust-pip {
+      width: clamp(12px, 1.6vw, 18px);
+      height: clamp(12px, 1.6vw, 18px);
+      border-radius: 50%;
+      background: rgba(124, 74, 45, 0.18);
+      border: 2px solid rgba(124, 74, 45, 0.4);
+      position: relative;
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.25s ease, border-color 0.25s ease;
+    }
+
+    .cust-pip.served {
+      background: radial-gradient(circle at 35% 35%, #fde047, #f59e0b);
+      border-color: #b45309;
+      transform: scale(1.12);
+      box-shadow: 0 0 6px rgba(245, 158, 11, 0.65);
+    }
+
+    .cust-pip.missed {
+      background: #ef4444;
+      border-color: #991b1b;
+      opacity: 0.7;
+    }
+
+    /* Center Coin Star Bar & Combo Flame Meter */
+    #scorePill {
+      flex: 1 1 auto;
+      max-width: 520px;
+      justify-content: space-between;
+    }
+
+    #coinMeterWrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1 1 auto;
+    }
+
+    #coinEmblem {
+      width: clamp(24px, 3vw, 32px);
+      height: clamp(24px, 3vw, 32px);
+      flex-shrink: 0;
+      filter: drop-shadow(0 2px 4px rgba(180, 83, 9, 0.45));
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    #coinEmblem.pulse {
+      transform: scale(1.28) rotate(12deg);
+    }
+
+    #coinBarOuter {
+      position: relative;
+      flex: 1 1 auto;
+      height: clamp(16px, 2.2vh, 22px);
+      background: #432312;
+      border-radius: 999px;
+      border: 2px solid #7c4a2d;
+      overflow: visible;
+      box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.55);
+    }
+
+    #coinBarFill {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 55%, #fef08a 100%);
+      box-shadow: 0 0 10px rgba(251, 191, 36, 0.7);
+      transition: width 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .star-marker {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%) scale(0.88);
+      width: clamp(20px, 2.5vw, 26px);
+      height: clamp(20px, 2.5vw, 26px);
+      filter: grayscale(0.85) brightness(0.75);
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.3s ease;
+      pointer-events: none;
+    }
+
+    .star-marker.earned {
+      filter: grayscale(0) brightness(1.08) drop-shadow(0 2px 6px rgba(245, 158, 11, 0.9));
+      transform: translate(-50%, -50%) scale(1.18);
+    }
+
+    /* Combo Streak Meter */
+    #comboWrap {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding-left: 6px;
+      border-left: 2px solid rgba(124, 74, 45, 0.25);
+    }
+
+    #comboFlameIcon {
+      width: clamp(20px, 2.5vw, 26px);
+      height: clamp(20px, 2.5vw, 26px);
+      opacity: 0.4;
+      transform: scale(0.9);
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease, filter 0.2s ease;
+    }
+
+    #comboFlameIcon.hot {
+      opacity: 1;
+      transform: scale(1.15);
+      filter: drop-shadow(0 0 8px rgba(249, 115, 22, 0.85));
+    }
+
+    #comboPips {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    #comboPipsRow {
+      display: flex;
+      gap: 3px;
+    }
+
+    .combo-pip {
+      width: clamp(8px, 1.1vw, 12px);
+      height: clamp(10px, 1.4vh, 14px);
+      border-radius: 4px;
+      background: rgba(124, 74, 45, 0.22);
+      border: 1.5px solid rgba(124, 74, 45, 0.45);
+      transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .combo-pip.lit-1 {
+      background: #fbbf24;
+      border-color: #d97706;
+      box-shadow: 0 0 5px rgba(251, 191, 36, 0.7);
+    }
+    .combo-pip.lit-2 {
+      background: #f97316;
+      border-color: #c2410c;
+      box-shadow: 0 0 6px rgba(249, 115, 22, 0.8);
+      transform: scaleY(1.08);
+    }
+    .combo-pip.lit-3 {
+      background: #ef4444;
+      border-color: #991b1b;
+      box-shadow: 0 0 8px rgba(239, 68, 68, 0.9);
+      transform: scaleY(1.15);
+    }
+    .combo-pip.lit-4 {
+      background: linear-gradient(180deg, #fde047 0%, #ef4444 50%, #ec4899 100%);
+      border-color: #be185d;
+      box-shadow: 0 0 10px rgba(236, 72, 153, 0.95);
+      transform: scaleY(1.22);
+    }
+
+    #comboTimerTrack {
+      width: 100%;
+      height: 4px;
+      background: rgba(67, 35, 18, 0.25);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    #comboTimerFill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #ef4444, #fbbf24);
+      border-radius: 999px;
+      transition: width 0.1s linear;
+    }
+
+    /* Top-Right Corner Tactile Buttons (ONLY 2 buttons visible during gameplay!) */
+    #hudButtons {
+      display: flex;
+      align-items: center;
+      gap: clamp(6px, 1vw, 10px);
+      pointer-events: auto;
+    }
+
+    .icon-btn {
+      width: clamp(42px, 5.2vw, 52px);
+      height: clamp(42px, 5.2vw, 52px);
+      border-radius: 50%;
+      border: 3px solid #6c3d22;
+      background: linear-gradient(180deg, #fff9ef 0%, #f3d7b0 100%);
+      box-shadow: 0 4px 0 #6c3d22, 0 6px 12px rgba(0, 0, 0, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+      cursor: pointer;
+      transition: transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.12s ease, background 0.15s ease;
+      outline: none;
+    }
+
+    .icon-btn:hover {
+      transform: translateY(-2px) scale(1.04);
+      background: linear-gradient(180deg, #ffffff 0%, #fae3c3 100%);
+    }
+
+    .icon-btn:active {
+      transform: translateY(2px) scale(0.95);
+      box-shadow: 0 1px 0 #6c3d22, 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .icon-btn svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* 5-Critter End-of-Wave Podium Modal (Zero Text!) */
+    #podiumModal {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(24, 11, 5, 0.76);
+      backdrop-filter: blur(7px);
+      padding: clamp(10px, 2.5vw, 24px);
+    }
+
+    #podiumModal.open {
+      display: flex;
+      animation: modalFadeIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.92); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    #podiumCard {
+      width: min(94vw, 680px);
+      max-height: 92vh;
+      background: linear-gradient(180deg, #fff9f0 0%, #f5dfc1 100%);
+      border: 5px solid #7c4a2d;
+      border-radius: 32px;
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.6), inset 0 3px 0 rgba(255, 255, 255, 0.9);
+      padding: clamp(14px, 2.5vh, 26px) clamp(14px, 3vw, 28px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      gap: clamp(10px, 2vh, 20px);
+    }
+
+    /* Star Banner at Top of Podium */
+    #podiumStarsRow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(10px, 2.2vw, 20px);
+      padding: 6px 22px;
+      background: rgba(124, 74, 45, 0.1);
+      border-radius: 999px;
+      border: 2px solid rgba(124, 74, 45, 0.25);
+    }
+
+    .podium-star {
+      width: clamp(42px, 7vw, 64px);
+      height: clamp(42px, 7vw, 64px);
+      filter: grayscale(0.9) brightness(0.72) opacity(0.45);
+      transform: scale(0.85);
+      transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.45s ease;
+    }
+
+    .podium-star.earned {
+      filter: grayscale(0) brightness(1.06) drop-shadow(0 4px 12px rgba(245, 158, 11, 0.85));
+      transform: scale(1.12);
+    }
+
+    /* 5-Critter Podium Stage */
+    #podiumStage {
+      width: 100%;
+      height: clamp(190px, 42vh, 300px);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: clamp(6px, 1.8vw, 16px);
+      padding: 12px 6px 0;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(217, 179, 130, 0.35) 100%);
+      border-radius: 22px;
+      border: 2px solid rgba(124, 74, 45, 0.22);
+    }
+
+    .podium-col {
+      flex: 1 1 0;
+      max-width: 112px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      height: 100%;
+    }
+
+    .podium-badge {
+      width: clamp(24px, 3.8vw, 34px);
+      height: clamp(24px, 3.8vw, 34px);
+      margin-bottom: 4px;
+      flex-shrink: 0;
+    }
+
+    .podium-avatar-wrap {
+      position: relative;
+      width: clamp(44px, 7.5vw, 68px);
+      height: clamp(44px, 7.5vw, 68px);
+      border-radius: 50%;
+      border: 3px solid #7c4a2d;
+      background: #fff5e4;
+      overflow: hidden;
+      margin-bottom: 6px;
+      flex-shrink: 0;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+    }
+
+    .podium-col.is-player .podium-avatar-wrap {
+      border: 4px solid #f59e0b;
+      box-shadow: 0 0 0 3px #fef08a, 0 6px 16px rgba(245, 158, 11, 0.65);
+      transform: scale(1.08);
+    }
+
+    .podium-avatar-wrap img {
+      position: absolute;
+      max-width: none;
+      display: block;
+    }
+
+    .podium-pillar {
+      width: 100%;
+      min-height: 28px;
+      border-radius: 14px 14px 6px 6px;
+      border: 3px solid #6c3d22;
+      background: linear-gradient(180deg, #e7c294 0%, #c6925b 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 6px 4px;
+      gap: 3px;
+      box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.55);
+      transition: height 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+      overflow: hidden;
+    }
+
+    .podium-col.rank-1 .podium-pillar {
+      background: linear-gradient(180deg, #fde047 0%, #f59e0b 100%);
+      border-color: #b45309;
+    }
+
+    .podium-col.rank-2 .podium-pillar {
+      background: linear-gradient(180deg, #f1f5f9 0%, #94a3b8 100%);
+      border-color: #475569;
+    }
+
+    .podium-col.rank-3 .podium-pillar {
+      background: linear-gradient(180deg, #fed7aa 0%, #d97706 100%);
+      border-color: #92400e;
+    }
+
+    .podium-col.is-player .podium-pillar {
+      box-shadow: 0 0 16px rgba(251, 191, 36, 0.65), inset 0 2px 0 rgba(255, 255, 255, 0.85);
+    }
+
+    .coin-disc-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      width: 72%;
+    }
+
+    .coin-disc {
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #d97706, #fde047, #d97706);
+      border: 1px solid #92400e;
+    }
+
+    /* Podium Action Buttons (Retry + Next Wave) */
+    #podiumActions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    .podium-btn {
+      width: clamp(68px, 11vw, 88px);
+      height: clamp(56px, 8.5vh, 72px);
+      border-radius: 22px;
+      border: 4px solid #5c341d;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+      transition: transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.14s ease;
+      outline: none;
+    }
+
+    #retryWaveBtn {
+      background: linear-gradient(180deg, #fde68a 0%, #f59e0b 100%);
+      border-color: #92400e;
+      box-shadow: 0 6px 0 #92400e, 0 10px 20px rgba(0, 0, 0, 0.35);
+    }
+
+    #nextWaveBtn {
+      background: linear-gradient(180deg, #86efac 0%, #22c55e 100%);
+      border-color: #166534;
+      box-shadow: 0 6px 0 #166534, 0 10px 20px rgba(34, 197, 94, 0.45);
+    }
+
+    .podium-btn:hover {
+      transform: translateY(-3px) scale(1.05);
+    }
+
+    .podium-btn:active {
+      transform: translateY(3px) scale(0.95);
+    }
+
+    .podium-btn svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    @media (max-width: 640px) {
+      #topHud {
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      #wavePill {
+        order: 1;
+        padding: 5px 10px;
+      }
+      #customerPips {
+        display: grid;
+        grid-template-columns: repeat(4, 11px);
+        gap: 3px;
+      }
+      .cust-pip {
+        width: 11px;
+        height: 11px;
+      }
+      #hudButtons {
+        order: 2;
+        margin-left: auto;
+      }
+      #scorePill {
+        order: 3;
+        flex: 1 1 100%;
+        width: 100%;
+        max-width: 100%;
+        padding: 5px 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="gameRoot">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Pure Visual Top HUD (Zero Text / Zero Digits) -->
+    <div id="topHud">
+      <!-- Wave Crowns + 8 Customer Queue Pips -->
+      <div class="hud-card" id="wavePill">
+        <div id="waveCrowns">
+          <svg class="wave-crown active" id="waveCrown0" viewBox="0 0 32 32">
+            <path d="M4 24L7 10L13 16L16 7L19 16L25 10L28 24Z" fill="#fbbf24" stroke="#92400e" stroke-width="2.5" stroke-linejoin="round"/>
+            <rect x="4" y="24" width="24" height="4" rx="2" fill="#f59e0b" stroke="#92400e" stroke-width="2"/>
+          </svg>
+          <svg class="wave-crown" id="waveCrown1" viewBox="0 0 32 32">
+            <path d="M4 24L7 10L13 16L16 7L19 16L25 10L28 24Z" fill="#fbbf24" stroke="#92400e" stroke-width="2.5" stroke-linejoin="round"/>
+            <rect x="4" y="24" width="24" height="4" rx="2" fill="#f59e0b" stroke="#92400e" stroke-width="2"/>
+          </svg>
+          <svg class="wave-crown" id="waveCrown2" viewBox="0 0 32 32">
+            <path d="M4 24L7 10L13 16L16 7L19 16L25 10L28 24Z" fill="#fbbf24" stroke="#92400e" stroke-width="2.5" stroke-linejoin="round"/>
+            <rect x="4" y="24" width="24" height="4" rx="2" fill="#f59e0b" stroke="#92400e" stroke-width="2"/>
+          </svg>
+        </div>
+        <div id="customerPips">
+          <div class="cust-pip" id="custPip0"></div>
+          <div class="cust-pip" id="custPip1"></div>
+          <div class="cust-pip" id="custPip2"></div>
+          <div class="cust-pip" id="custPip3"></div>
+          <div class="cust-pip" id="custPip4"></div>
+          <div class="cust-pip" id="custPip5"></div>
+          <div class="cust-pip" id="custPip6"></div>
+          <div class="cust-pip" id="custPip7"></div>
+        </div>
+      </div>
+
+      <!-- Coin Star Progress Bar + Combo Streak Meter -->
+      <div class="hud-card" id="scorePill">
+        <div id="coinMeterWrap">
+          <svg id="coinEmblem" viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="15" fill="#fbbf24" stroke="#92400e" stroke-width="3"/>
+            <circle cx="18" cy="18" r="11" fill="#fde047" stroke="#d97706" stroke-width="1.8"/>
+            <polygon points="18,9 20.6,14.6 26.7,15.3 22.1,19.5 23.4,25.6 18,22.5 12.6,25.6 13.9,19.5 9.3,15.3 15.4,14.6" fill="#f59e0b"/>
+          </svg>
+          <div id="coinBarOuter">
+            <div id="coinBarFill"></div>
+            <!-- 1-Star Milestone (110 coins = 44% of 250 max bar) -->
+            <svg class="star-marker" id="hudStar1" style="left: 44%;" viewBox="0 0 32 32">
+              <polygon points="16,2 20.3,10.8 30,12.2 23,19 24.6,28.6 16,24 7.4,28.6 9,19 2,12.2 11.7,10.8" fill="#fde047" stroke="#92400e" stroke-width="2.5" stroke-linejoin="round"/>
+            </svg>
+            <!-- 2-Star Milestone (165 coins = 66% of 250 max bar) -->
+            <svg class="star-marker" id="hudStar2" style="left: 66%;" viewBox="0 0 32 32">
+              <polygon points="16,2 20.3,10.8 30,12.2 23,19 24.6,28.6 16,24 7.4,28.6 9,19 2,12.2 11.7,10.8" fill="#fde047" stroke="#92400e" stroke-width="2.5" stroke-linejoin="round"/>
+            </svg>
+            <!-- 3-Star Milestone (220 coins = 88% of 250 max bar) -->
+            <svg class="star-marker" id="hudStar3" style="left: 88%;" viewBox="0 0 32 32">
+              <polygon points="16,2 20.3,10.8 30,12.2 23,19 24.6,28.6 16,24 7.4,28.6 9,19 2,12.2 11.7,10.8" fill="#fde047" stroke="#92400e" stroke-width="2.5" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Combo Flame Gauge -->
+        <div id="comboWrap">
+          <svg id="comboFlameIcon" viewBox="0 0 32 32">
+            <path d="M16 3C16 3 26 11 26 20C26 25.5 21.5 29 16 29C10.5 29 6 25.5 6 20C6 15 10 10 12 8C11 12 13 14 13 14C13 10 16 3 16 3Z" fill="#f97316" stroke="#9a3412" stroke-width="2.2" stroke-linejoin="round"/>
+            <path d="M16 14C16 14 21 18 21 22.5C21 25.5 18.8 27.5 16 27.5C13.2 27.5 11 25.5 11 22.5C11 19 16 14 16 14Z" fill="#fde047"/>
+          </svg>
+          <div id="comboPips">
+            <div id="comboPipsRow">
+              <div class="combo-pip" id="comboPip0"></div>
+              <div class="combo-pip" id="comboPip1"></div>
+              <div class="combo-pip" id="comboPip2"></div>
+              <div class="combo-pip" id="comboPip3"></div>
+            </div>
+            <div id="comboTimerTrack">
+              <div id="comboTimerFill"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2 Clean Top-Right Corner Buttons: Mute & Reset -->
+      <div id="hudButtons">
+        <button id="muteBtn" class="icon-btn" type="button">
+          <svg id="speakerOnIcon" viewBox="0 0 32 32">
+            <path d="M5 12H11L18 6V26L11 20H5V12Z" fill="#7c4a2d" stroke="#432312" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M22 11C24.2 13.2 24.2 18.8 22 21" fill="none" stroke="#d97706" stroke-width="2.8" stroke-linecap="round"/>
+            <path d="M25.5 7.5C29.5 11.5 29.5 20.5 25.5 24.5" fill="none" stroke="#f59e0b" stroke-width="2.8" stroke-linecap="round"/>
+          </svg>
+          <svg id="speakerOffIcon" viewBox="0 0 32 32" style="display: none;">
+            <path d="M5 12H11L18 6V26L11 20H5V12Z" fill="#9ca3af" stroke="#4b5563" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M21 12L28 19M28 12L21 19" fill="none" stroke="#ef4444" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button id="resetBtn" class="icon-btn" type="button">
+          <svg viewBox="0 0 32 32">
+            <path d="M25 16A9 9 0 1 1 22.3 9.6" fill="none" stroke="#7c4a2d" stroke-width="3.4" stroke-linecap="round"/>
+            <polygon points="24,4 25.5,12.5 17,11" fill="#d97706" stroke="#7c4a2d" stroke-width="1.8" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- End-of-Wave 5-Critter Podium Modal (100% Zero Text) -->
+    <div id="podiumModal">
+      <div id="podiumCard">
+        <div id="podiumStarsRow">
+          <svg class="podium-star" id="podiumStar0" viewBox="0 0 48 48">
+            <polygon points="24,3 30.5,16.2 45,18.3 34.5,28.5 37,43 24,36.1 11,43 13.5,28.5 3,18.3 17.5,16.2" fill="#fde047" stroke="#92400e" stroke-width="3.2" stroke-linejoin="round"/>
+          </svg>
+          <svg class="podium-star" id="podiumStar1" viewBox="0 0 48 48">
+            <polygon points="24,3 30.5,16.2 45,18.3 34.5,28.5 37,43 24,36.1 11,43 13.5,28.5 3,18.3 17.5,16.2" fill="#fde047" stroke="#92400e" stroke-width="3.2" stroke-linejoin="round"/>
+          </svg>
+          <svg class="podium-star" id="podiumStar2" viewBox="0 0 48 48">
+            <polygon points="24,3 30.5,16.2 45,18.3 34.5,28.5 37,43 24,36.1 11,43 13.5,28.5 3,18.3 17.5,16.2" fill="#fde047" stroke="#92400e" stroke-width="3.2" stroke-linejoin="round"/>
+          </svg>
+        </div>
+
+        <div id="podiumStage"></div>
+
+        <div id="podiumActions">
+          <button id="retryWaveBtn" class="podium-btn" type="button">
+            <svg viewBox="0 0 36 36">
+              <path d="M28 18A10 10 0 1 1 25 10.8" fill="none" stroke="#78350f" stroke-width="4" stroke-linecap="round"/>
+              <polygon points="26.5,4.5 28.5,14 19,12.5" fill="#78350f" stroke="#78350f" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button id="nextWaveBtn" class="podium-btn" type="button">
+            <svg viewBox="0 0 36 36">
+              <polygon points="9,6 29,18 9,30" fill="#ffffff" stroke="#14532d" stroke-width="3.2" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./js/game.js"></script>
+</body>
+</html>
