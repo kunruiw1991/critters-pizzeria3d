@@ -1,9 +1,24 @@
 import { createPizzeriaScene } from './scene3d.js';
 import { PizzeriaAudio } from './audio.js';
 
-const RIVAL_SCORES = [220, 165, 110, 55];
-const RIVAL_CRITTERS = ['dogday', 'catnap', 'craftycorn', 'hoppy'];
-const PLAYER_CRITTER = 'baba';
+const CHEF_POOL = ['catnap', 'dogday', 'craftycorn', 'hoppy', 'picky', 'bubba', 'kickin'];
+const RIVAL_SCORES_BY_WAVE = {
+  1: [220, 165, 110, 55],
+  2: [285, 215, 145, 75],
+  3: [315, 240, 165, 85],
+};
+
+function getWaveRivalScores(wave = 1) {
+  return RIVAL_SCORES_BY_WAVE[wave] || RIVAL_SCORES_BY_WAVE[1];
+}
+
+function getRivalCritters(playerCritter = 'catnap') {
+  const topRivals = ['dogday', 'catnap', 'craftycorn', 'hoppy', 'picky']
+    .filter((c) => c !== playerCritter)
+    .slice(0, 3);
+  // Keep Baba Chops in the 4th rival slot (lowest rival score) so Baba Chops never steals 1st place
+  return [...topRivals, 'baba'];
+}
 
 const CRITTER_CROPS = {
   baba: [0.04, 0.02, 0.92, 0.96],
@@ -163,6 +178,7 @@ function createCustomerInstance(spec, slotIndex, wave, seqIndex) {
 }
 
 const state = {
+  playerCritter: 'catnap',
   wave: 1,
   maxWaves: 3,
   coins: 0,
@@ -207,9 +223,10 @@ function computeBoardRecipe(board) {
   return 'cheese_pizza';
 }
 
-function computeRankAndStars(coins) {
+function computeRankAndStars(coins, wave = state.wave) {
+  const rivalScores = getWaveRivalScores(wave);
   let rank = 1;
-  for (const rivalScore of RIVAL_SCORES) {
+  for (const rivalScore of rivalScores) {
     if (coins < rivalScore) {
       rank += 1;
     }
@@ -262,17 +279,36 @@ function getWantedPizzaTypes() {
   return wanted;
 }
 
+function boardCanMakeRecipe(board, targetRecipe) {
+  if (!board || !board.hasDough || !targetRecipe) return false;
+  if (targetRecipe === 'cheese_pizza') {
+    return !board.hasPepperoni && !board.hasVeggie;
+  }
+  if (targetRecipe === 'pepperoni_pizza') {
+    return !board.hasVeggie;
+  }
+  if (targetRecipe === 'supreme_pizza') {
+    return true;
+  }
+  return false;
+}
+
 function computeRecommendedStationId() {
   if (state.waveDone) return null;
 
-  // 1. Burned or Baked oven takes top priority
+  // 1. Burned oven takes top priority
   const burnedOven = state.ovens.find((o) => o.state === 'burned');
   if (burnedOven) return burnedOven.id;
 
-  const bakedOven = state.ovens.find((o) => o.state === 'baked');
-  if (bakedOven) return bakedOven.id;
+  const wanted = getWantedPizzaTypes();
 
-  // 2. Ready Mango Juice for a customer who wants juice
+  // 2. Baked oven whose recipe matches a waiting customer's pizza order
+  const matchingBakedOven = state.ovens.find(
+    (o) => o.state === 'baked' && wanted.some((w) => w.type === (o.recipe || 'cheese_pizza'))
+  );
+  if (matchingBakedOven) return matchingBakedOven.id;
+
+  // 3. Ready Mango Juice for a customer who wants juice
   const wantsJuice = state.customers.some(
     (c) => c && c.mood === 'waiting' && c.order.some((it) => !it.done && it.isJuice)
   );
@@ -281,8 +317,7 @@ function computeRecommendedStationId() {
     if (readyCup) return readyCup.id;
   }
 
-  // 3. Determine next needed pizza recipe not already in an oven
-  const wanted = getWantedPizzaTypes();
+  // 4. Determine next needed pizza recipe not already in an oven
   const ovenCounts = {};
   for (const o of state.ovens) {
     if (o.state === 'baking' || o.state === 'baked') {
@@ -303,30 +338,47 @@ function computeRecommendedStationId() {
   }
 
   const hasEmptyOven = state.ovens.some((o) => o.state === 'empty');
-  const activeBoard = state.prepBoards.find((b) => b.hasDough);
 
-  if (activeBoard && targetRecipe) {
+  // If no oven is empty and there is an unmatched baked pizza blocking the oven, highlight trash_bin
+  if (!hasEmptyOven) {
+    const unmatchedBaked = state.ovens.find(
+      (o) => o.state === 'baked' && !wanted.some((w) => w.type === (o.recipe || 'cheese_pizza'))
+    );
+    if (unmatchedBaked) return 'trash_bin';
+  }
+
+  // Pick a prep board that can build targetRecipe (preferring one that already matches or has dough)
+  const compatibleBoard =
+    state.prepBoards.find((b) => b.hasDough && b.recipe === targetRecipe) ||
+    state.prepBoards.find((b) => boardCanMakeRecipe(b, targetRecipe));
+
+  if (compatibleBoard && targetRecipe) {
     if (targetRecipe === 'supreme_pizza') {
-      if (!activeBoard.hasPepperoni) return 'topping_pepperoni';
-      if (!activeBoard.hasVeggie) return 'topping_veggie';
-      if (hasEmptyOven) return activeBoard.id;
+      if (!compatibleBoard.hasPepperoni) return 'topping_pepperoni';
+      if (!compatibleBoard.hasVeggie) return 'topping_veggie';
+      if (hasEmptyOven) return compatibleBoard.id;
     } else if (targetRecipe === 'pepperoni_pizza') {
-      if (!activeBoard.hasPepperoni) return 'topping_pepperoni';
-      if (hasEmptyOven) return activeBoard.id;
+      if (!compatibleBoard.hasPepperoni) return 'topping_pepperoni';
+      if (hasEmptyOven) return compatibleBoard.id;
     } else if (targetRecipe === 'cheese_pizza') {
-      if (hasEmptyOven) return activeBoard.id;
+      if (hasEmptyOven) return compatibleBoard.id;
     }
   }
 
-  if (activeBoard && hasEmptyOven) {
-    return activeBoard.id;
-  }
-
   const emptyBoard = state.prepBoards.find((b) => !b.hasDough);
-  if (emptyBoard && (hasEmptyOven || !activeBoard)) {
+  if (emptyBoard && (hasEmptyOven || !compatibleBoard)) {
     return 'dough_tray';
   }
 
+  // If both prep boards have dough with wrong toppings for all waiting customers, suggest trash_bin
+  const anyBoardMatchesAnyWanted = state.prepBoards.some(
+    (b) => b.hasDough && wanted.some((w) => boardCanMakeRecipe(b, w.type))
+  );
+  if (!anyBoardMatchesAnyWanted && state.prepBoards.some((b) => b.hasDough)) {
+    return 'trash_bin';
+  }
+
+  const activeBoard = compatibleBoard || state.prepBoards.find((b) => b.hasDough);
   return activeBoard ? activeBoard.id : 'dough_tray';
 }
 
@@ -575,7 +627,7 @@ function handleOvenTap(ovenIndex, targetSlotIndex = null) {
       ? [state.customers[targetSlotIndex]].filter(Boolean)
       : state.customers.filter((c) => c !== null && c.mood === 'waiting');
 
-  // 1. Exact recipe match (prioritize lowest patience)
+  // Strict exact recipe match (prioritize lowest patience)
   const exactMatches = [];
   for (const cust of candidateSlots) {
     const item = cust.order.find((it) => !it.done && !it.isJuice && it.type === bakedRecipe);
@@ -589,23 +641,10 @@ function handleOvenTap(ovenIndex, targetSlotIndex = null) {
     matchedItem = exactMatches[0].item;
   }
 
-  // 2. Graceful upgrade/fallback match if player dragged directly or baked an upgraded/different pizza
-  if (!matchedCust) {
-    const fallbackMatches = [];
-    for (const cust of candidateSlots) {
-      const item = cust.order.find((it) => !it.done && !it.isJuice);
-      if (item) {
-        fallbackMatches.push({ cust, item });
-      }
-    }
-    if (fallbackMatches.length > 0) {
-      fallbackMatches.sort((a, b) => a.cust.patience - b.cust.patience);
-      matchedCust = fallbackMatches[0].cust;
-      matchedItem = fallbackMatches[0].item;
-    }
-  }
-
   if (!matchedCust || !matchedItem) {
+    if (sceneApi && typeof sceneApi.triggerStationBounce === 'function') {
+      sceneApi.triggerStationBounce(`oven_${ovenIndex}`);
+    }
     return false;
   }
 
@@ -640,8 +679,21 @@ function handleTrashBinTap() {
     safeAudio('playBurnPoof');
     return true;
   }
-  // 2. Otherwise clear a prep board if one has dough
-  const occupiedBoard = state.prepBoards.find((b) => b.hasDough);
+  // 2. Clear any baked oven whose recipe is not needed by any waiting customer
+  const wanted = getWantedPizzaTypes();
+  const unneededBakedOven = state.ovens.find(
+    (o) => o.state === 'baked' && !wanted.some((w) => w.type === (o.recipe || 'cheese_pizza'))
+  );
+  if (unneededBakedOven) {
+    clearOven(unneededBakedOven);
+    safeAudio('playBurnPoof');
+    return true;
+  }
+  // 3. Otherwise clear a prep board if one has dough (preferring one that doesn't match wanted recipes)
+  const mismatchedBoard = state.prepBoards.find(
+    (b) => b.hasDough && !wanted.some((w) => boardCanMakeRecipe(b, w.type))
+  );
+  const occupiedBoard = mismatchedBoard || state.prepBoards.find((b) => b.hasDough);
   if (occupiedBoard) {
     occupiedBoard.state = 'empty';
     occupiedBoard.hasDough = false;
@@ -707,14 +759,6 @@ function handleCustomerTap(slotIndex) {
     const readyCup = state.juices.find((j) => j.fillProgress >= 1.0);
     if (readyCup) {
       return handleJuiceTap(readyCup.index, slotIndex);
-    }
-  }
-
-  // Fallback: any baked oven if customer needs a pizza
-  if (neededPizza) {
-    const anyBakedOven = state.ovens.find((o) => o.state === 'baked');
-    if (anyBakedOven) {
-      return handleOvenTap(anyBakedOven.index, slotIndex);
     }
   }
 
@@ -1009,13 +1053,31 @@ export function startNextWave() {
   return resetWave(nextWave);
 }
 
+export function cyclePlayerChef(preferredCritter = null) {
+  if (preferredCritter && CHEF_POOL.includes(preferredCritter)) {
+    state.playerCritter = preferredCritter;
+  } else {
+    const idx = CHEF_POOL.indexOf(state.playerCritter);
+    state.playerCritter = CHEF_POOL[(idx + 1) % CHEF_POOL.length];
+  }
+  syncHud();
+  if (state.waveDone) {
+    renderPodiumModal();
+  }
+  return state.playerCritter;
+}
+
 export function getState() {
   const { rank, stars } = state.waveDone
     ? { rank: state.rank, stars: state.stars }
-    : computeRankAndStars(state.coins);
+    : computeRankAndStars(state.coins, state.wave);
   const recommendedStationId = computeRecommendedStationId();
+  const rivalScores = getWaveRivalScores(state.wave);
+  const rivalCritters = getRivalCritters(state.playerCritter);
 
   return {
+    playerCritter: state.playerCritter,
+    rivalCritters,
     wave: state.wave,
     maxWaves: state.maxWaves,
     coins: state.coins,
@@ -1029,7 +1091,7 @@ export function getState() {
     waveDone: state.waveDone,
     rank,
     stars,
-    rivalScores: [...RIVAL_SCORES],
+    rivalScores: [...rivalScores],
     recommendedStationId,
     recommendedStation: recommendedStationId,
     recommendedStations: recommendedStationId ? [recommendedStationId] : [],
@@ -1063,6 +1125,16 @@ function pulseCoinEmblem() {
 }
 
 function syncHud() {
+  // 0. Player Chef Avatar in Top-Left HUD
+  const chefImg = document.getElementById('chefAvatarImg');
+  if (chefImg) {
+    const expectedSrc = `./assets/${state.playerCritter}.webp`;
+    if (chefImg.getAttribute('src') !== expectedSrc) {
+      chefImg.setAttribute('src', expectedSrc);
+    }
+    chefImg.style.cssText = getCritterCropStyle(state.playerCritter);
+  }
+
   // 1. Wave Crowns
   for (let w = 0; w < 3; w++) {
     const crown = document.getElementById(`waveCrown${w}`);
@@ -1080,19 +1152,34 @@ function syncHud() {
     pip.classList.toggle('missed', outcome === 'missed');
   }
 
-  // 3. Coin Progress Bar & 3 Star Markers (250 coin scale so 220 = 88%)
+  // 3. Coin Progress Bar & 3 Star Markers scaled to current wave's rival scores
+  const rivalScores = getWaveRivalScores(state.wave);
+  const s3Target = rivalScores[0]; // 1st place (3 stars)
+  const s2Target = rivalScores[1]; // 2nd place (2 stars)
+  const s1Target = rivalScores[2]; // 3rd place (1 star)
+  const barMax = Math.round(s3Target / 0.88);
+
   const coinFill = document.getElementById('coinBarFill');
   if (coinFill) {
-    const pct = Math.max(0, Math.min(100, (state.coins / 250) * 100));
+    const pct = Math.max(0, Math.min(100, (state.coins / barMax) * 100));
     coinFill.style.width = `${pct.toFixed(1)}%`;
   }
 
   const star1 = document.getElementById('hudStar1');
   const star2 = document.getElementById('hudStar2');
   const star3 = document.getElementById('hudStar3');
-  if (star1) star1.classList.toggle('earned', state.coins >= 110);
-  if (star2) star2.classList.toggle('earned', state.coins >= 165);
-  if (star3) star3.classList.toggle('earned', state.coins >= 220);
+  if (star1) {
+    star1.style.left = `${((s1Target / barMax) * 100).toFixed(1)}%`;
+    star1.classList.toggle('earned', state.coins >= s1Target);
+  }
+  if (star2) {
+    star2.style.left = `${((s2Target / barMax) * 100).toFixed(1)}%`;
+    star2.classList.toggle('earned', state.coins >= s2Target);
+  }
+  if (star3) {
+    star3.style.left = `${((s3Target / barMax) * 100).toFixed(1)}%`;
+    star3.classList.toggle('earned', state.coins >= s3Target);
+  }
 
   // 4. Combo Streak Flame Meter
   const flameIcon = document.getElementById('comboFlameIcon');
@@ -1161,15 +1248,18 @@ function renderPodiumModal() {
     nextBtn.style.display = state.stars >= 1 ? 'flex' : 'none';
   }
 
-  // Build 5-Critter competitors list (Player + 4 Rivals)
+  const rivalScores = getWaveRivalScores(state.wave);
+  const rivalCritters = getRivalCritters(state.playerCritter);
+
+  // Build 5-Critter competitors list (Player Chef + 4 Rivals)
   const entries = [
     {
-      critter: PLAYER_CRITTER,
+      critter: state.playerCritter,
       score: state.coins,
       isPlayer: true,
     },
-    ...RIVAL_SCORES.map((score, idx) => ({
-      critter: RIVAL_CRITTERS[idx],
+    ...rivalScores.map((score, idx) => ({
+      critter: rivalCritters[idx],
       score,
       isPlayer: false,
     })),
@@ -1197,6 +1287,11 @@ function renderPodiumModal() {
 
   const maxScore = Math.max(240, ...entries.map((e) => e.score));
 
+  const chefHatSvg = `<svg class="podium-chef-hat" viewBox="0 0 36 28">
+    <path d="M8 18C5.2 17.5 3.5 15 3.5 12.2C3.5 9 6.2 6.5 9.5 6.8C10.8 3.6 14.1 1.5 18 1.5C21.9 1.5 25.2 3.6 26.5 6.8C29.8 6.5 32.5 9 32.5 12.2C32.5 15 30.8 17.5 28 18L26.5 24.5H9.5L8 18Z" fill="#ffffff" stroke="#5c3d2e" stroke-width="2.4" stroke-linejoin="round"/>
+    <rect x="9" y="21" width="18" height="4.5" rx="1.8" fill="#fef08a" stroke="#5c3d2e" stroke-width="2"/>
+  </svg>`;
+
   stage.innerHTML = podiumOrder
     .map((entry) => {
       const heightPct = Math.max(16, Math.min(68, Math.round((entry.score / maxScore) * 66) + 14));
@@ -1208,8 +1303,11 @@ function renderPodiumModal() {
       return `
         <div class="podium-col rank-${entry.rank} ${entry.isPlayer ? 'is-player' : ''}">
           ${getRankBadgeSvg(entry.rank)}
-          <div class="podium-avatar-wrap">
-            <img src="./assets/${entry.critter}.webp" style="${getCritterCropStyle(entry.critter)}" alt="" draggable="false" />
+          <div class="podium-avatar-outer">
+            ${entry.isPlayer ? chefHatSvg : ''}
+            <div class="podium-avatar-wrap">
+              <img src="./assets/${entry.critter}.webp" style="${getCritterCropStyle(entry.critter)}" alt="" draggable="false" />
+            </div>
           </div>
           <div class="podium-pillar" style="height: ${heightPct}%;">
             <div class="coin-disc-stack">${discsHtml}</div>
@@ -1251,6 +1349,16 @@ function renderSceneFrame(dt = 0.016) {
 }
 
 function initDomControls() {
+  const chefAvatarWrap = document.getElementById('chefAvatarWrap');
+  if (chefAvatarWrap) {
+    chefAvatarWrap.addEventListener('click', (e) => {
+      e.stopPropagation();
+      safeAudio('init');
+      safeAudio('playClick');
+      cyclePlayerChef();
+    });
+  }
+
   const muteBtn = document.getElementById('muteBtn');
   const speakerOn = document.getElementById('speakerOnIcon');
   const speakerOff = document.getElementById('speakerOffIcon');
@@ -1346,6 +1454,7 @@ window.PizzeriaGame = {
   stepSimulation,
   resetWave,
   startNextWave,
+  cyclePlayerChef,
   getScene: () => sceneApi,
 };
 

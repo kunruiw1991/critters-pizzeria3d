@@ -27,14 +27,14 @@
 
 ## 🏆 Strict Top-3 Podium Qualification (`🥇 3⭐`, `🥈 2⭐`, `🥉 1⭐`, `4th/5th = 0⭐ Defeat`)
 
-Each of the **3 Waves** serves **8 Smiling Critter customers** (`baba`, `dogday`, `catnap`, `craftycorn`, `hoppy`, `picky`, `bubba`, `kickin`). At the end of the wave, the **Zero-Text 5-Critter Olympic Podium Modal** compares the player's coins against 4 rival scores `[220, 165, 110, 55]`:
+Each of the **3 Waves** serves **8 Smiling Critter customers** (`baba`, `dogday`, `catnap`, `craftycorn`, `hoppy`, `picky`, `bubba`, `kickin`). You play as **Chef CatNap** by default (or tap the **Chef Toque Hat Avatar** in the top-left HUD pill to cycle your Chef character between `catnap`, `dogday`, `craftycorn`, `hoppy`, `picky`, `bubba`, and `kickin`). At the end of each wave, the **Zero-Text 5-Critter Olympic Podium Modal** highlights your Chef Critter with a **White Chef Toque Hat Badge** and compares your coins against 4 rival scores (with **Baba Chops** placed at the 4th rival slot so Baba Chops never steals 1st place):
 
-| Podium Finish | Coin Threshold | Star Rating | Wave Progression |
-| :--- | :--- | :--- | :--- |
-| **1st Place (`🥇`)** | `coins >= 220` | `⭐⭐⭐` Gold Crown Trophy | Unlocks Next Wave |
-| **2nd Place (`🥈`)** | `coins >= 165` | `⭐⭐` Silver Medal | Unlocks Next Wave |
-| **3rd Place (`🥉`)** | `coins >= 110` | `⭐` Bronze Medal | Unlocks Next Wave |
-| **4th / 5th Place** | `coins < 110` | `0⭐` Defeat | Next Wave Locked (Retry Only) |
+| Podium Finish | Wave 1 Coins | Wave 2 Coins | Wave 3 Coins | Star Rating | Wave Progression |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **1st Place (`🥇`)** | `coins >= 220` | `coins >= 285` | `coins >= 315` | `⭐⭐⭐` Gold Crown Trophy | Unlocks Next Wave |
+| **2nd Place (`🥈`)** | `coins >= 165` | `coins >= 215` | `coins >= 240` | `⭐⭐` Silver Medal | Unlocks Next Wave |
+| **3rd Place (`🥉`)** | `coins >= 110` | `coins >= 145` | `coins >= 165` | `⭐` Bronze Medal | Unlocks Next Wave |
+| **4th / 5th Place** | `coins < 110` | `coins < 145` | `coins < 165` | `0⭐` Defeat | Next Wave Locked (Retry Only) |
 
 ---
 
