@@ -66,33 +66,33 @@ const WAVE_PATIENCE = {
 const WAVE_SCHEDULES = {
   1: [
     { friend: 'baba', items: ['cheese_pizza'] },
-    { friend: 'dogday', items: ['pepperoni_pizza'] },
-    { friend: 'catnap', items: ['supreme_pizza', 'mango_juice'] },
-    { friend: 'craftycorn', items: ['cheese_pizza'] },
-    { friend: 'hoppy', items: ['cheese_pizza'] },
-    { friend: 'picky', items: ['pepperoni_pizza'] },
-    { friend: 'bubba', items: ['cheese_pizza'] },
-    { friend: 'kickin', items: ['cheese_pizza'] },
+    { friend: 'dogday', items: ['pepperoni_pizza', 'mango_juice'] },
+    { friend: 'picky', items: ['supreme_pizza', 'mango_juice'] },
+    { friend: 'craftycorn', items: ['cheese_pizza', 'mango_juice'] },
+    { friend: 'hoppy', items: ['pepperoni_pizza'] },
+    { friend: 'bubba', items: ['cheese_pizza', 'mango_juice'] },
+    { friend: 'kickin', items: ['supreme_pizza', 'mango_juice'] },
+    { friend: 'dogday', items: ['pepperoni_pizza', 'mango_juice'] },
   ],
   2: [
-    { friend: 'dogday', items: ['pepperoni_pizza'] },
+    { friend: 'dogday', items: ['pepperoni_pizza', 'mango_juice'] },
     { friend: 'baba', items: ['supreme_pizza', 'mango_juice'] },
     { friend: 'hoppy', items: ['cheese_pizza', 'mango_juice'] },
-    { friend: 'catnap', items: ['pepperoni_pizza'] },
-    { friend: 'picky', items: ['supreme_pizza', 'mango_juice'] },
-    { friend: 'craftycorn', items: ['cheese_pizza'] },
+    { friend: 'picky', items: ['pepperoni_pizza', 'mango_juice'] },
+    { friend: 'bubba', items: ['supreme_pizza', 'mango_juice'] },
+    { friend: 'craftycorn', items: ['cheese_pizza', 'mango_juice'] },
     { friend: 'kickin', items: ['pepperoni_pizza', 'mango_juice'] },
-    { friend: 'bubba', items: ['supreme_pizza'] },
+    { friend: 'hoppy', items: ['supreme_pizza', 'mango_juice'] },
   ],
   3: [
-    { friend: 'catnap', items: ['supreme_pizza', 'mango_juice'] },
+    { friend: 'picky', items: ['supreme_pizza', 'mango_juice'] },
     { friend: 'baba', items: ['pepperoni_pizza', 'mango_juice'] },
-    { friend: 'dogday', items: ['supreme_pizza'] },
+    { friend: 'dogday', items: ['supreme_pizza', 'mango_juice'] },
     { friend: 'hoppy', items: ['cheese_pizza', 'mango_juice'] },
     { friend: 'bubba', items: ['supreme_pizza', 'mango_juice'] },
-    { friend: 'picky', items: ['pepperoni_pizza'] },
+    { friend: 'picky', items: ['pepperoni_pizza', 'mango_juice'] },
     { friend: 'craftycorn', items: ['supreme_pizza', 'mango_juice'] },
-    { friend: 'kickin', items: ['pepperoni_pizza'] },
+    { friend: 'kickin', items: ['pepperoni_pizza', 'mango_juice'] },
   ],
 };
 
@@ -726,7 +726,39 @@ function handleJuiceTap(juiceIndex, targetSlotIndex = null) {
     }
   }
 
-  if (juiceWaiters.length === 0) return false;
+  if (juiceWaiters.length === 0) {
+    // Allow serving a complimentary Mango Juice treat (+10 coins, +5s patience) to any waiting customer
+    const treatTargets = candidateSlots
+      .filter((c) => c && c.mood === 'waiting' && !c.bonusJuiceGiven)
+      .sort((a, b) => a.patience - b.patience);
+    if (treatTargets.length === 0) return false;
+
+    const treatCust = treatTargets[0];
+    treatCust.bonusJuiceGiven = true;
+    treatCust.patience = Math.min(treatCust.maxPatience, treatCust.patience + 5.0);
+    treatCust.patienceRatio = treatCust.patience / treatCust.maxPatience;
+    state.coins += 10;
+
+    cup.fillProgress = 0;
+    cup.ready = false;
+    cup.state = 'filling';
+
+    if (sceneApi && typeof sceneApi.spawnFlyingFood === 'function') {
+      sceneApi.spawnFlyingFood(`juice_${juiceIndex}`, treatCust.slotIndex, {
+        type: 'mango_juice',
+        recipe: 'mango_juice',
+        item: 'mango_juice',
+        isJuice: true,
+      });
+    }
+    if (sceneApi && typeof sceneApi.spawnCoinBurst === 'function') {
+      sceneApi.spawnCoinBurst(treatCust.slotIndex, 2);
+    }
+    safeAudio('playServeWhoosh');
+    safeAudio('playCoinJingle', 2);
+    pulseCoinEmblem();
+    return true;
+  }
   juiceWaiters.sort((a, b) => a.cust.patience - b.cust.patience);
 
   const { cust, item } = juiceWaiters[0];
@@ -1285,7 +1317,8 @@ function renderPodiumModal() {
     entries[4],
   ].filter(Boolean);
 
-  const maxScore = Math.max(240, ...entries.map((e) => e.score));
+  const RANK_HEIGHT_PCT = { 1: 60, 2: 47, 3: 36, 4: 26, 5: 17 };
+  const RANK_DISC_COUNTS = { 1: 9, 2: 7, 3: 5, 4: 3, 5: 1 };
 
   const chefHatSvg = `<svg class="podium-chef-hat" viewBox="0 0 36 28">
     <path d="M8 18C5.2 17.5 3.5 15 3.5 12.2C3.5 9 6.2 6.5 9.5 6.8C10.8 3.6 14.1 1.5 18 1.5C21.9 1.5 25.2 3.6 26.5 6.8C29.8 6.5 32.5 9 32.5 12.2C32.5 15 30.8 17.5 28 18L26.5 24.5H9.5L8 18Z" fill="#ffffff" stroke="#5c3d2e" stroke-width="2.4" stroke-linejoin="round"/>
@@ -1294,8 +1327,8 @@ function renderPodiumModal() {
 
   stage.innerHTML = podiumOrder
     .map((entry) => {
-      const heightPct = Math.max(16, Math.min(68, Math.round((entry.score / maxScore) * 66) + 14));
-      const discCount = Math.max(0, Math.min(10, Math.round(entry.score / 25)));
+      const heightPct = RANK_HEIGHT_PCT[entry.rank] || 17;
+      const discCount = entry.score <= 0 ? 0 : (RANK_DISC_COUNTS[entry.rank] || 1);
       const discsHtml = Array.from({ length: discCount })
         .map(() => `<div class="coin-disc"></div>`)
         .join('');
