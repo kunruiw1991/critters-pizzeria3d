@@ -10,24 +10,31 @@
 
 **Critter Pizzeria 3D** is a cozy, tactile, 100% zero-text 3D WebGL time-management pizzeria game inspired by *Cooking Marina* (`小镇大厨`), designed to be immediately intuitive for both a 5-year-old child and an adult player.
 
-### 🍕 4 Clear Menu Items
+### 🍕 Core Menu & Interactive Toy Combo Stations (Pillar 1)
 1. **Cheese Pizza (`25` base coins)**: Plump dough + rich tomato sauce + golden mozzarella cheese baked in a brick oven (`3.0s`).
 2. **Pepperoni Pizza (`35` base coins)**: Cheese pizza base topped with savory red pepperoni slices (`3.0s` bake).
 3. **Supreme Pizza (`45` base coins)**: Cheese pizza base topped with red pepperoni slices + crisp green bell-pepper rings & basil (`3.0s` bake).
 4. **Golden Mango Juice (`15` base coins)**: Auto-refilling golden mango juice dispensers (`2.5s` refill) topped with an orange slice and straw when ready.
+5. **Strawberry-Vanilla 3D Gelato Sundae Bar (`gelato_station`, `+20` bonus coins & `+6.0s` patience)**: Multi-step interactive Italian gelato station (`empty -> swirled -> topped -> serve`). Tap to swirl pastel strawberry-vanilla gelato, crown with golden star sprinkles & a ruby cherry, and launch a 3D sundae cup to any waiting customer!
+6. **Golden Honey-Star Crust Shaker (`star_crust`, `+15` bonus coins)**: Tap or drag onto any pizza on the prep boards or brick ovens (or tap on an empty board for forgiving 1-tap auto-dough + star glaze) to rim the crust with 8 sculpted 3D golden stars and honey glaze.
 
-### 🕹️ Smart 1-Tap & Drag-and-Drop Controls (With Guided Next-Step Highlight Ring)
-- **Guided Next-Step Ring**: A pulsing golden base ring + bobbing 3D pointer chevron highlights the optimal next station to tap.
-- **Dough & Toppings**: Tap (or drag from) `dough_tray` to place a sauced & cheesed pizza base onto an empty wooden peel (`prep_board_0` or `prep_board_1`) with a `0.25s` parabolic mini-arc flight and squash-and-stretch spring bounce. Tap `topping_pepperoni` or `topping_veggie` to launch toppings onto the prep board.
-- **Dual Domed Brick Ovens**: Tap a prepped peel (`prep_board_0..1`) to slide the pizza into the first free brick oven (`oven_0` or `oven_1`). A 3D circular timer ring above the oven fills in green over `3.0s`.
-- **Golden Bake, Overbake Warning & Trash Bin**: When baking completes (`state === 'baked'`), a crystal kitchen timer bell chimes and a `7.5s` amber/red burn countdown begins. Tap the baked oven (or drag to a customer) to launch the pizza in a parabolic arc to the matching Smiling Critter customer! If left unserved for `> 7.5s`, the pizza burns (`state === 'burned'`); tap the burned oven or the copper `trash_bin` to clear it.
-- **Combo Flame Streak (`1x -> 4x`)**: Completing customer orders within `4.5s` of the previous serve increments the combo flame gauge (`1x -> 2x -> 3x -> 4x`), awarding `+5 * (combo - 1)` bonus coins and transposing the joyful kalimba chomp arpeggio upward.
+### 🐥 Sous-Chef Helper Buddy & Trattoria Party Fever (Pillar 2)
+- **3D KickinChicken Sous-Chef Helper (`helper_buddy`)**:
+  - **Automatic Burn-Prevention Shield**: Watches both brick ovens and automatically waves a golden star wand to rescue any baked pizza (`burnProgress >= 0.62 -> 0.15`) so a 5-year-old's pizza never burns while the Sous-Chef is on duty!
+  - **1-Tap Kitchen Assist**: Tap `helper_buddy` anytime to rescue an oven, auto-serve a ready dish, or cheer up all waiting customers (`+3.0s` patience, `+10` bonus coins).
+- **Trattoria Party Fever (`combo >= 3` or `triggerPartyFever()`)**:
+  - Reaching a `3x` combo streak triggers `6.0s` of **Trattoria Party Fever** with rotating 3D disco lights, falling 3D star confetti, frozen customer patience drain, and `+15` bonus coins on every dish served!
+
+### 🌅 Progressive Wave 1 / 2 / 3 Trattoria Evolutions (Pillar 3)
+- **Wave 1 (`morning_trattoria`)**: Warm terracotta morning sunlight, potted 3D basil herbs on the back shelf, Gelato Bar, Star-Crust Shaker, and Sous-Chef Helper Buddy.
+- **Wave 2 (`sunset_fiesta`)**: Amber-gold sunset lighting, 3D festival bunting pennants & glowing lanterns, a spinning 3D illuminated pizza wall emblem, and rainbow star-sprinkle jars at the Gelato Bar.
+- **Wave 3 (`starlight_gala`)**: Royal twilight-gold lighting, golden crown arches over both brick ovens, overhead crystal starlight chandeliers, a triple-tier golden gelato fountain tower, and floating golden sparkles behind all 3 customer slots.
 
 ---
 
 ## 🏆 Strict Top-3 Podium Qualification (`🥇 3⭐`, `🥈 2⭐`, `🥉 1⭐`, `4th/5th = 0⭐ Defeat`)
 
-Each of the **3 Waves** serves **8 Smiling Critter customers** (`baba`, `dogday`, `catnap`, `craftycorn`, `hoppy`, `picky`, `bubba`, `kickin`). You play as **Chef CatNap** by default (or tap the **Chef Toque Hat Avatar** in the top-left HUD pill to cycle your Chef character between `catnap`, `dogday`, `craftycorn`, `hoppy`, `picky`, `bubba`, and `kickin`). At the end of each wave, the **Zero-Text 5-Critter Olympic Podium Modal** highlights your Chef Critter with a **White Chef Toque Hat Badge** and compares your coins against 4 rival scores (with **Baba Chops** placed at the 4th rival slot so Baba Chops never steals 1st place):
+Each of the **3 Waves** serves **8 Smiling Critter customers** (`baba`, `dogday`, `catnap`, `craftycorn`, `hoppy`, `picky`, `bubba`, `kickin`). You play as **Chef CatNap** by default (or tap the `80x80px` **Chef Toque Hat Avatar** in the top-left HUD pill to cycle your Chef character). At the end of each wave, the **Zero-Text 5-Critter Olympic Podium Modal** highlights your Chef Critter with a **White Chef Toque Hat Badge** and compares your coins against 4 rival scores:
 
 | Podium Finish | Wave 1 Coins | Wave 2 Coins | Wave 3 Coins | Star Rating | Wave Progression |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -38,17 +45,12 @@ Each of the **3 Waves** serves **8 Smiling Critter customers** (`baba`, `dogday`
 
 ---
 
-## 🛠️ Architecture & Creator + Critic Verification Changelog
+## 🛠️ Architecture & Verification Summary
 
-- **Engine**: Local Three.js (`models/three.module.min.js`) + procedural 3D Baba Chops plush rig (`models/baba_chops_model.js`) + 100% procedural WebAudio ASMR & kalimba/marimba synthesis (`js/audio.js`).
-- **Round 1 (Core Build & Balance)**:
-  - Built `index.html`, `js/game.js`, `js/scene3d.js`, and `js/audio.js` with `alphaHanziCount === 0` (`0` text/digits in DOM or Canvas, `0` `speechSynthesis` calls) and `<= 4` visible DOM buttons at any time.
-  - `@critic-gameplay` verified the end-to-end cooking/burn/trash/reset loop and 3-policy fast-forward bot balance (`Policy A Idle: 0 coins / 0⭐`, `Policy B Casual Kid: 140–200 coins / 1–2⭐`, `Policy C Skilled Chef: 345–475 coins / 3⭐`).
-- **Round 2 (Multi-Viewport Hitbox, Standee Cropping & Portrait HUD Polish)**:
-  - Fixed 3D raycast hitbox occlusion in `js/scene3d.js` using counter-level hit discs and staggered station coordinates (`>= 132px` hitboxes across all 9 stations).
-  - Framed all Smiling Critter `.webp` portraits into tightly-cropped rounded-arch standee textures and podium avatars (`CRITTER_CROPS`) so order bubbles never overlap character faces.
-  - Updated `@media (max-width: 640px)` in `index.html` with a 2x4 customer pip grid and wrapped score bar so `390x844` portrait has `0px` HUD overlap.
-- **Round 3 (Tactile Juice, Guided Highlight Ring & Counter Breathing Room)**:
-  - Hidden duplicate standee paw spheres when `friend === 'baba'` (`babaPlush` 3D hooves grounded on counter ledge) and increased wood-counter breathing room between `oven_1`'s timer ring and `slot_2`'s paws.
-  - Added the pulsing golden `recommendedStationId` guide ring + bobbing 3D pointer chevron and `0.25s` parabolic mini-arc ingredient flights (`spawnFlyingIngredient` + `triggerStationBounce`).
-  - Signed off 100% by `@critic-gameplay`, `@critic-ux`, and `@critic-visual`.
+- **Engine**: Local Three.js (`models/three.module.min.js`) + procedural 3D Baba Chops plush rig (`models/baba_chops_model.js`) + 3D Sous-Chef Helper & Party Fever rig (`js/helper_and_events.js`) + 100% procedural WebAudio synthesis (`js/audio.js`).
+- **Verified Invariants (`1280x800`, `844x390`, `390x844`)**:
+  - `alphaHanziCount === 0` (`0` visible text/digits in DOM or Canvas, `0` `speechSynthesis` calls).
+  - Non-IBL material hygiene: `maxMetalness = 0.220` (`<= 0.22`) across all `1,073` 3D scene meshes.
+  - Child-friendly touch targets: `5` total interactive DOM controls (`<= 6` cap), all `>= 80x80px` with `0px` overlap and `0` scrollbars.
+  - Constant child-friendly difficulty: Baseline guided playtest achieves **1st place (`3 stars`)** across Wave 1 (`590` coins), Wave 2 (`640` coins), and Wave 3 (`660` coins) with `0` missed customers.
+- **3-Round Collaborative Design Debate**: See [DEBATE_critters-pizzeria3d.md](./DEBATE_critters-pizzeria3d.md).

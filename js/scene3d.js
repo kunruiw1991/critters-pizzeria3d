@@ -1,5 +1,9 @@
 import * as THREE from '../models/three.module.min.js';
 import { buildBabaChopsPlushModel } from '../models/baba_chops_model.js';
+import {
+  enforceNonIblMaterialHygiene,
+  createPizzeriaHelperAndEvents,
+} from './helper_and_events.js';
 
 export const STATION_IDS = [
   'dough_tray',
@@ -12,6 +16,9 @@ export const STATION_IDS = [
   'trash_bin',
   'juice_0',
   'juice_1',
+  'gelato_station',
+  'star_crust',
+  'helper_buddy',
   'customer_0',
   'customer_1',
   'customer_2',
@@ -28,6 +35,9 @@ const STATION_COORDS = {
   trash_bin: new THREE.Vector3(3.10, 0.25, 2.15),
   juice_0: new THREE.Vector3(3.65, 0.25, 0.90),
   juice_1: new THREE.Vector3(3.65, 0.25, -0.35),
+  gelato_station: new THREE.Vector3(-3.55, 0.20, 0.05),
+  star_crust: new THREE.Vector3(-1.65, 0.20, -0.85),
+  helper_buddy: new THREE.Vector3(-2.65, 0.25, -0.55),
   customer_0: new THREE.Vector3(-2.75, 0.78, -1.90),
   customer_1: new THREE.Vector3(-0.05, 0.78, -1.90),
   customer_2: new THREE.Vector3(2.65, 0.78, -1.90),
@@ -378,25 +388,63 @@ function build3DPizzaAssembly(radius = 0.50) {
   }
   root.add(veggieGroup);
 
-  function setPizzaLook({ hasPepperoni = false, hasVeggie = false, cookState = 'raw', bakeProgress = 0 } = {}) {
+  const starCrustGroup = new THREE.Group();
+  const starGoldMat = new THREE.MeshStandardMaterial({
+    color: 0xffd166,
+    emissive: 0xff9f1c,
+    emissiveIntensity: 0.42,
+    roughness: 0.25,
+    metalness: 0.18,
+  });
+  const honeyRim = new THREE.Mesh(
+    new THREE.TorusGeometry(radius * 0.88, radius * 0.045, 10, 28),
+    starGoldMat
+  );
+  honeyRim.rotation.x = Math.PI * 0.5;
+  honeyRim.position.y = 0.095;
+  starCrustGroup.add(honeyRim);
+
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI * 2) / 8;
+    const sr = radius * 0.88;
+    const starCharm = new THREE.Mesh(
+      new THREE.OctahedronGeometry(radius * 0.105, 0),
+      starGoldMat
+    );
+    starCharm.scale.set(1.15, 0.55, 1.15);
+    starCharm.rotation.y = a + Math.PI * 0.25;
+    starCharm.position.set(Math.cos(a) * sr, 0.118, Math.sin(a) * sr);
+    starCrustGroup.add(starCharm);
+  }
+  starCrustGroup.visible = false;
+  root.add(starCrustGroup);
+
+  function setPizzaLook({
+    hasPepperoni = false,
+    hasVeggie = false,
+    hasStarCrust = false,
+    cookState = 'raw',
+    bakeProgress = 0,
+  } = {}) {
     pepperoniGroup.visible = Boolean(hasPepperoni);
     veggieGroup.visible = Boolean(hasVeggie);
+    starCrustGroup.visible = Boolean(hasStarCrust);
 
     if (cookState === 'burned') {
       crustMat.color.setHex(0x2b2523);
       sauceMat.color.setHex(0x1f1918);
       cheeseMat.color.setHex(0x3a302c);
     } else if (cookState === 'baked') {
-      crustMat.color.setHex(0xd9822b);
+      crustMat.color.setHex(hasStarCrust ? 0xf59e0b : 0xd9822b);
       sauceMat.color.setHex(0xc1121f);
       cheeseMat.color.setHex(0xffbe0b);
     } else if (cookState === 'baking') {
       const k = Math.max(0, Math.min(1, bakeProgress));
-      crustMat.color.setHex(0xf3c677).lerp(new THREE.Color(0xd9822b), k);
+      crustMat.color.setHex(0xf3c677).lerp(new THREE.Color(hasStarCrust ? 0xf59e0b : 0xd9822b), k);
       cheeseMat.color.setHex(0xffd166).lerp(new THREE.Color(0xffbe0b), k);
       sauceMat.color.setHex(0xd62828);
     } else {
-      crustMat.color.setHex(0xf6d592);
+      crustMat.color.setHex(hasStarCrust ? 0xfde047 : 0xf6d592);
       sauceMat.color.setHex(0xd62828);
       cheeseMat.color.setHex(0xffe082);
     }
@@ -406,7 +454,131 @@ function build3DPizzaAssembly(radius = 0.50) {
     root,
     pepperoniGroup,
     veggieGroup,
+    starCrustGroup,
     setPizzaLook,
+  };
+}
+
+function build3DGelatoAssembly() {
+  const root = new THREE.Group();
+
+  const waffleMat = new THREE.MeshStandardMaterial({
+    color: 0xe8b87d,
+    roughness: 0.52,
+    metalness: 0.04,
+  });
+  const cupRimMat = new THREE.MeshStandardMaterial({
+    color: 0xff8fab,
+    roughness: 0.35,
+    metalness: 0.08,
+  });
+  const strawberryMat = new THREE.MeshStandardMaterial({
+    color: 0xff8fab,
+    emissive: 0xfb6f92,
+    emissiveIntensity: 0.16,
+    roughness: 0.28,
+    metalness: 0.04,
+  });
+  const vanillaMat = new THREE.MeshStandardMaterial({
+    color: 0xfff3b0,
+    emissive: 0xffd166,
+    emissiveIntensity: 0.14,
+    roughness: 0.28,
+    metalness: 0.04,
+  });
+  const goldStarMat = new THREE.MeshStandardMaterial({
+    color: 0xffd166,
+    emissive: 0xff9f1c,
+    emissiveIntensity: 0.45,
+    roughness: 0.22,
+    metalness: 0.18,
+  });
+  const cherryMat = new THREE.MeshStandardMaterial({
+    color: 0xe63946,
+    emissive: 0x9b0d18,
+    emissiveIntensity: 0.22,
+    roughness: 0.18,
+    metalness: 0.08,
+  });
+
+  const waffleCup = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.22, 0.14, 0.28, 18),
+    waffleMat
+  );
+  waffleCup.position.y = 0.14;
+  waffleCup.castShadow = true;
+  root.add(waffleCup);
+
+  const cupRim = new THREE.Mesh(
+    new THREE.TorusGeometry(0.22, 0.026, 10, 22),
+    cupRimMat
+  );
+  cupRim.rotation.x = Math.PI * 0.5;
+  cupRim.position.y = 0.28;
+  root.add(cupRim);
+
+  const swirlGroup = new THREE.Group();
+  const tier1 = new THREE.Mesh(
+    new THREE.TorusGeometry(0.14, 0.068, 12, 20),
+    strawberryMat
+  );
+  tier1.rotation.x = Math.PI * 0.5;
+  tier1.position.y = 0.31;
+  swirlGroup.add(tier1);
+
+  const tier2 = new THREE.Mesh(
+    new THREE.TorusGeometry(0.10, 0.058, 12, 20),
+    vanillaMat
+  );
+  tier2.rotation.x = Math.PI * 0.5;
+  tier2.position.y = 0.39;
+  swirlGroup.add(tier2);
+
+  const tier3 = new THREE.Mesh(
+    new THREE.ConeGeometry(0.10, 0.18, 16),
+    strawberryMat
+  );
+  tier3.position.y = 0.49;
+  swirlGroup.add(tier3);
+  root.add(swirlGroup);
+
+  const crownGroup = new THREE.Group();
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI * 2) / 6;
+    const starSprinkle = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.038, 0),
+      goldStarMat
+    );
+    starSprinkle.position.set(Math.cos(a) * 0.15, 0.38 + (i % 2) * 0.05, Math.sin(a) * 0.15);
+    starSprinkle.rotation.set(a, a * 0.7, 0);
+    crownGroup.add(starSprinkle);
+  }
+  const cherryTop = new THREE.Mesh(
+    new THREE.SphereGeometry(0.058, 14, 12),
+    cherryMat
+  );
+  cherryTop.position.set(0, 0.59, 0);
+  crownGroup.add(cherryTop);
+
+  const crownHalo = new THREE.Mesh(
+    new THREE.TorusGeometry(0.14, 0.018, 8, 20),
+    goldStarMat
+  );
+  crownHalo.rotation.x = Math.PI * 0.5;
+  crownHalo.position.y = 0.46;
+  crownGroup.add(crownHalo);
+  root.add(crownGroup);
+
+  function setGelatoLook(gelatoState = 'empty') {
+    swirlGroup.visible = gelatoState === 'swirled' || gelatoState === 'crowned';
+    crownGroup.visible = gelatoState === 'crowned';
+  }
+
+  return {
+    root,
+    swirlGroup,
+    crownGroup,
+    setGelatoLook,
   };
 }
 
@@ -1033,7 +1205,7 @@ export function createPizzeriaScene(canvasEl, callbacks = {}) {
   const brassMat = new THREE.MeshStandardMaterial({
     color: 0xf2cc8f,
     roughness: 0.32,
-    metalness: 0.65,
+    metalness: 0.20,
   });
 
   // Environment & Counter Architecture
@@ -1229,7 +1401,7 @@ export function createPizzeriaScene(canvasEl, callbacks = {}) {
     potGroup.add(sauceTop);
     const ladleHandle = new THREE.Mesh(
       new THREE.CylinderGeometry(0.02, 0.02, 0.36, 8),
-      new THREE.MeshStandardMaterial({ color: 0xdee2e6, metalness: 0.6, roughness: 0.25 })
+      new THREE.MeshStandardMaterial({ color: 0xdee2e6, metalness: 0.20, roughness: 0.25 })
     );
     ladleHandle.position.set(0.08, 0.38, 0.04);
     ladleHandle.rotation.z = -0.45;
@@ -1558,7 +1730,7 @@ export function createPizzeriaScene(canvasEl, callbacks = {}) {
     const copperMat = new THREE.MeshStandardMaterial({
       color: 0xc86d51,
       roughness: 0.36,
-      metalness: 0.48,
+      metalness: 0.20,
     });
     const body = new THREE.Mesh(
       new THREE.CylinderGeometry(0.32, 0.25, 0.52, 20),
@@ -1684,6 +1856,380 @@ export function createPizzeriaScene(canvasEl, callbacks = {}) {
     };
   });
 
+  // 7B. PILLAR 1A: 3D SWIRL GELATO & RAINBOW STAR SUNDAE STATION ('gelato_station' at (-3.55, 0.0, 0.05))
+  const gelatoStationGroup = new THREE.Group();
+  gelatoStationGroup.position.set(STATION_COORDS.gelato_station.x, 0.0, STATION_COORDS.gelato_station.z);
+  let gelatoCtrl = null;
+  {
+    const mintCaseMat = new THREE.MeshStandardMaterial({
+      color: 0x72efdd,
+      roughness: 0.38,
+      metalness: 0.08,
+    });
+    const pinkTrimMat = new THREE.MeshStandardMaterial({
+      color: 0xff8fab,
+      roughness: 0.35,
+      metalness: 0.08,
+    });
+    const goldStarMat = new THREE.MeshStandardMaterial({
+      color: 0xffd166,
+      emissive: 0xff9f1c,
+      emissiveIntensity: 0.42,
+      roughness: 0.24,
+      metalness: 0.18,
+    });
+
+    const barBase = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.50, 0.54, 0.12, 24),
+      mintCaseMat
+    );
+    barBase.position.y = 0.06;
+    barBase.castShadow = true;
+    barBase.receiveShadow = true;
+    gelatoStationGroup.add(barBase);
+
+    const dripTray = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.34, 0.36, 0.04, 20),
+      brassMat
+    );
+    dripTray.position.set(0.0, 0.13, 0.12);
+    gelatoStationGroup.add(dripTray);
+
+    const machineTower = new THREE.Mesh(
+      new THREE.BoxGeometry(0.54, 0.56, 0.34),
+      creamLinenMat
+    );
+    machineTower.position.set(0, 0.38, -0.18);
+    machineTower.castShadow = true;
+    gelatoStationGroup.add(machineTower);
+
+    const machineCap = new THREE.Mesh(
+      new THREE.BoxGeometry(0.58, 0.08, 0.38),
+      pinkTrimMat
+    );
+    machineCap.position.set(0, 0.68, -0.18);
+    gelatoStationGroup.add(machineCap);
+
+    [-0.14, 0.14].forEach((nx, nIdx) => {
+      const hopper = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.11, 0.09, 0.16, 16),
+        new THREE.MeshStandardMaterial({
+          color: nIdx === 0 ? 0xff8fab : 0xfff3b0,
+          roughness: 0.3,
+          metalness: 0.05,
+        })
+      );
+      hopper.position.set(nx, 0.78, -0.18);
+      gelatoStationGroup.add(hopper);
+
+      const spout = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.025, 0.022, 0.14, 10),
+        brassMat
+      );
+      spout.position.set(nx, 0.48, 0.02);
+      spout.rotation.x = 0.35;
+      gelatoStationGroup.add(spout);
+    });
+
+    const gelatoCupAssembly = build3DGelatoAssembly();
+    gelatoCupAssembly.root.position.set(0.0, 0.14, 0.12);
+    gelatoCupAssembly.setGelatoLook('empty');
+    gelatoStationGroup.add(gelatoCupAssembly.root);
+
+    // Wave 2 visual upgrade: Rainbow Star-Sprinkle Jars on side wings
+    const wave2SprinkleJars = new THREE.Group();
+    [-0.36, 0.36].forEach((jx, jIdx) => {
+      const jar = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.09, 0.09, 0.22, 14),
+        new THREE.MeshStandardMaterial({
+          color: jIdx === 0 ? 0xffbe0b : 0xa855f7,
+          emissive: jIdx === 0 ? 0xf59e0b : 0x9333ea,
+          emissiveIntensity: 0.25,
+          roughness: 0.25,
+          metalness: 0.12,
+        })
+      );
+      jar.position.set(jx, 0.23, -0.02);
+      wave2SprinkleJars.add(jar);
+    });
+    gelatoStationGroup.add(wave2SprinkleJars);
+
+    // Wave 3 visual upgrade: Triple-Tier Royal Gelato Fountain Tower
+    const wave3FountainTower = new THREE.Group();
+    wave3FountainTower.position.set(0, 0.74, -0.18);
+    [
+      { r: 0.22, y: 0.10, color: 0xffd166 },
+      { r: 0.16, y: 0.24, color: 0xff8fab },
+      { r: 0.10, y: 0.36, color: 0x72efdd },
+    ].forEach((tier) => {
+      const disc = new THREE.Mesh(
+        new THREE.CylinderGeometry(tier.r, tier.r * 0.85, 0.06, 18),
+        new THREE.MeshStandardMaterial({
+          color: tier.color,
+          emissive: tier.color,
+          emissiveIntensity: 0.22,
+          roughness: 0.26,
+          metalness: 0.16,
+        })
+      );
+      disc.position.y = tier.y;
+      wave3FountainTower.add(disc);
+    });
+    const fountainStarTop = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.095, 0),
+      goldStarMat
+    );
+    fountainStarTop.position.y = 0.50;
+    wave3FountainTower.add(fountainStarTop);
+    wave3FountainTower.visible = false;
+    gelatoStationGroup.add(wave3FountainTower);
+
+    const gelatoHalo = new THREE.Mesh(
+      new THREE.RingGeometry(0.48, 0.56, 28),
+      new THREE.MeshBasicMaterial({
+        color: 0xff8fab,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.45,
+        toneMapped: false,
+      })
+    );
+    gelatoHalo.rotation.x = -Math.PI * 0.5;
+    gelatoHalo.position.y = 0.016;
+    gelatoStationGroup.add(gelatoHalo);
+
+    gelatoCtrl = {
+      group: gelatoStationGroup,
+      gelatoCupAssembly,
+      wave2SprinkleJars,
+      wave3FountainTower,
+      fountainStarTop,
+      gelatoHalo,
+    };
+  }
+  registerStationGroup('gelato_station', gelatoStationGroup, 0.56, 0.28);
+
+  // 7C. PILLAR 1B: GOLDEN HONEY-STAR CRUST SHAKER ('star_crust' at (-1.65, 0.0, -0.85))
+  const starCrustStationGroup = new THREE.Group();
+  starCrustStationGroup.position.set(STATION_COORDS.star_crust.x, 0.0, STATION_COORDS.star_crust.z);
+  let starCrustCtrl = null;
+  {
+    const starGoldMat = new THREE.MeshStandardMaterial({
+      color: 0xffd166,
+      emissive: 0xff9f1c,
+      emissiveIntensity: 0.42,
+      roughness: 0.24,
+      metalness: 0.18,
+    });
+    const honeyPotMat = new THREE.MeshStandardMaterial({
+      color: 0xf59e0b,
+      emissive: 0xd97706,
+      emissiveIntensity: 0.24,
+      roughness: 0.28,
+      metalness: 0.16,
+    });
+
+    const coaster = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.38, 0.42, 0.06, 22),
+      darkWoodMat
+    );
+    coaster.position.y = 0.03;
+    coaster.receiveShadow = true;
+    starCrustStationGroup.add(coaster);
+
+    const shakerJar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.24, 0.28, 0.34, 16),
+      honeyPotMat
+    );
+    shakerJar.position.y = 0.23;
+    shakerJar.castShadow = true;
+    starCrustStationGroup.add(shakerJar);
+
+    const shakerDome = new THREE.Mesh(
+      new THREE.SphereGeometry(0.23, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.5),
+      brassMat
+    );
+    shakerDome.position.y = 0.40;
+    starCrustStationGroup.add(shakerDome);
+
+    const orbitStarsGroup = new THREE.Group();
+    orbitStarsGroup.position.y = 0.62;
+    for (let i = 0; i < 5; i++) {
+      const a = (i * Math.PI * 2) / 5;
+      const starMesh = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.068, 0),
+        starGoldMat
+      );
+      starMesh.position.set(Math.cos(a) * 0.24, (i % 2) * 0.05, Math.sin(a) * 0.24);
+      orbitStarsGroup.add(starMesh);
+    }
+    starCrustStationGroup.add(orbitStarsGroup);
+
+    const starHalo = new THREE.Mesh(
+      new THREE.RingGeometry(0.40, 0.48, 28),
+      new THREE.MeshBasicMaterial({
+        color: 0xffd166,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.55,
+        toneMapped: false,
+      })
+    );
+    starHalo.rotation.x = -Math.PI * 0.5;
+    starHalo.position.y = 0.016;
+    starCrustStationGroup.add(starHalo);
+
+    starCrustCtrl = {
+      group: starCrustStationGroup,
+      orbitStarsGroup,
+      starHalo,
+    };
+  }
+  registerStationGroup('star_crust', starCrustStationGroup, 0.50, 0.28);
+
+  // 7D. PILLAR 2: 3D SOUS-CHEF HELPER BUDDY & VIP PARTY FEVER ('helper_buddy' at (-2.65, 0.25, -0.55))
+  const helperAndEventsCtrl = createPizzeriaHelperAndEvents(THREE, scene, scene);
+  if (helperAndEventsCtrl && helperAndEventsCtrl.helperGroup) {
+    registerStationGroup('helper_buddy', helperAndEventsCtrl.helperGroup, 0.54, 0.36);
+  }
+
+  // 7E. PILLAR 3: WAVES 1, 2, AND 3 STAGE-BY-STAGE ENVIRONMENT & TOY EVOLUTIONS
+  const wave1PropsGroup = new THREE.Group();
+  const wave2PropsGroup = new THREE.Group();
+  const wave3PropsGroup = new THREE.Group();
+  envGroup.add(wave1PropsGroup, wave2PropsGroup, wave3PropsGroup);
+
+  let spinningPizzaEmblem = null;
+  const wave3Sparkles = [];
+  {
+    // Wave 1 ('morning_trattoria'): Potted 3D Basil Herbs & Golden Olive Oil Cruets on backShelf
+    const basilLeafMat = new THREE.MeshStandardMaterial({ color: 0x2b9348, roughness: 0.38, metalness: 0.04 });
+    const potMat = new THREE.MeshStandardMaterial({ color: 0xe07a5f, roughness: 0.55, metalness: 0.05 });
+    [-4.2, -1.8, 1.8, 4.2].forEach((px, pIdx) => {
+      const herbPot = new THREE.Group();
+      herbPot.position.set(px, 2.74, -3.32);
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.16, 0.28, 14), potMat);
+      pot.position.y = 0.14;
+      herbPot.add(pot);
+      for (let l = 0; l < 5; l++) {
+        const la = (l * Math.PI * 2) / 5 + pIdx;
+        const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), basilLeafMat);
+        leaf.scale.set(1.3, 0.45, 0.85);
+        leaf.position.set(Math.cos(la) * 0.11, 0.32 + (l % 2) * 0.05, Math.sin(la) * 0.11);
+        herbPot.add(leaf);
+      }
+      wave1PropsGroup.add(herbPot);
+    });
+
+    // Wave 2 ('sunset_fiesta'): 3D Festive Bunting Pennants & Glowing Warm Fairy Lanterns + Spinning Pizza Emblem
+    const buntingColors = [0xff4d6d, 0xffbe0b, 0x2ec4b6, 0x8a5cf5, 0xf77f00];
+    for (let i = 0; i < 9; i++) {
+      const bx = -4.0 + i * 1.0;
+      const sag = Math.sin((i / 8) * Math.PI) * 0.28;
+      const pennant = new THREE.Mesh(
+        new THREE.ConeGeometry(0.20, 0.38, 4),
+        new THREE.MeshStandardMaterial({
+          color: buntingColors[i % buntingColors.length],
+          emissive: buntingColors[i % buntingColors.length],
+          emissiveIntensity: 0.22,
+          roughness: 0.35,
+          metalness: 0.08,
+        })
+      );
+      pennant.rotation.x = Math.PI;
+      pennant.position.set(bx, 3.25 - sag, -2.20);
+      wave2PropsGroup.add(pennant);
+
+      if (i < 8) {
+        const lantern = new THREE.Mesh(
+          new THREE.SphereGeometry(0.11, 12, 10),
+          new THREE.MeshStandardMaterial({
+            color: 0xffe599,
+            emissive: 0xff9f1c,
+            emissiveIntensity: 0.75,
+            roughness: 0.2,
+            metalness: 0.08,
+          })
+        );
+        lantern.position.set(bx + 0.5, 3.32 - sag * 0.85, -2.18);
+        wave2PropsGroup.add(lantern);
+      }
+    }
+
+    const emblemGroup = new THREE.Group();
+    emblemGroup.position.set(0, 3.85, -3.42);
+    const emblemPizza = build3DPizzaAssembly(0.68);
+    emblemPizza.setPizzaLook({ hasPepperoni: true, hasVeggie: true, hasStarCrust: true, cookState: 'baked' });
+    emblemPizza.root.rotation.x = Math.PI * 0.5;
+    emblemGroup.add(emblemPizza.root);
+    spinningPizzaEmblem = emblemGroup;
+    wave2PropsGroup.add(emblemGroup);
+    wave2PropsGroup.visible = false;
+
+    // Wave 3 ('starlight_gala'): Warm Glowing Chandeliers, Golden Oven Crown Arches & Floating Customer Sparkles
+    const royalGoldMat = new THREE.MeshStandardMaterial({
+      color: 0xfde047,
+      emissive: 0xf59e0b,
+      emissiveIntensity: 0.48,
+      roughness: 0.24,
+      metalness: 0.20,
+    });
+
+    // Golden Crown Arches over oven_0 and oven_1
+    [STATION_COORDS.oven_0, STATION_COORDS.oven_1].forEach((oCoord) => {
+      const crownArchGroup = new THREE.Group();
+      crownArchGroup.position.set(oCoord.x, 0.92, oCoord.z - 0.05);
+      const archRing = new THREE.Mesh(
+        new THREE.TorusGeometry(0.56, 0.05, 12, 24, Math.PI),
+        royalGoldMat
+      );
+      crownArchGroup.add(archRing);
+      for (let s = 0; s < 5; s++) {
+        const ang = (s / 4) * Math.PI;
+        const crownSpike = new THREE.Mesh(
+          new THREE.OctahedronGeometry(0.085, 0),
+          royalGoldMat
+        );
+        crownSpike.position.set(Math.cos(ang) * 0.62, Math.sin(ang) * 0.62, 0);
+        crownArchGroup.add(crownSpike);
+      }
+      wave3PropsGroup.add(crownArchGroup);
+    });
+
+    // Overhead Starlight Chandeliers
+    [-2.4, 2.4].forEach((cx) => {
+      const chandelier = new THREE.Group();
+      chandelier.position.set(cx, 4.05, -1.55);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.035, 10, 24), royalGoldMat);
+      ring.rotation.x = Math.PI * 0.5;
+      chandelier.add(ring);
+      for (let c = 0; c < 6; c++) {
+        const ca = (c * Math.PI * 2) / 6;
+        const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.08, 0), royalGoldMat);
+        crystal.position.set(Math.cos(ca) * 0.52, -0.10, Math.sin(ca) * 0.52);
+        chandelier.add(crystal);
+      }
+      wave3PropsGroup.add(chandelier);
+    });
+
+    // Celebratory Floating Golden Sparkles behind the 3 customer slots
+    [-2.75, -0.05, 2.65].forEach((slotX, sIdx) => {
+      for (let k = 0; k < 4; k++) {
+        const sp = new THREE.Mesh(new THREE.OctahedronGeometry(0.075, 0), royalGoldMat);
+        const basePos = new THREE.Vector3(
+          slotX + (k - 1.5) * 0.38,
+          0.95 + (k % 2) * 0.35,
+          -2.32
+        );
+        sp.position.copy(basePos);
+        sp.userData = { basePos, phase: sIdx * 1.7 + k * 1.1 };
+        wave3Sparkles.push(sp);
+        wave3PropsGroup.add(sp);
+      }
+    });
+    wave3PropsGroup.visible = false;
+  }
+
   // 8. THREE SMILING CRITTER CUSTOMER SLOTS ('customer_0', 'customer_1', 'customer_2')
   const critterStandeeTextures = {};
   CRITTER_IDS.forEach((cid) => {
@@ -1784,7 +2330,7 @@ export function createPizzeriaScene(canvasEl, callbacks = {}) {
     emissive: 0xff9f1c,
     emissiveIntensity: 0.35,
     roughness: 0.22,
-    metalness: 0.78,
+    metalness: 0.22,
   });
 
   const heartShape = new THREE.Shape();
@@ -1850,11 +2396,26 @@ export function createPizzeriaScene(canvasEl, callbacks = {}) {
         ring.position.set(Math.cos(a) * 0.12, i * 0.02, Math.sin(a) * 0.12);
         grp.add(ring);
       }
+    } else if (kind === 'star_crust') {
+      const starMat = new THREE.MeshStandardMaterial({
+        color: 0xffd166,
+        emissive: 0xd97706,
+        emissiveIntensity: 0.45,
+        roughness: 0.25,
+        metalness: 0.20,
+      });
+      for (let i = 0; i < 4; i++) {
+        const a = (i * Math.PI * 2) / 4;
+        const starOrb = new THREE.Mesh(new THREE.OctahedronGeometry(0.09, 0), starMat);
+        starOrb.position.set(Math.cos(a) * 0.13, i * 0.02, Math.sin(a) * 0.13);
+        grp.add(starOrb);
+      }
     } else if (kind === 'oven_slide') {
       const pizza = build3DPizzaAssembly(0.42);
       pizza.setPizzaLook({
         hasPepperoni: Boolean(dishSpec?.hasPepperoni),
         hasVeggie: Boolean(dishSpec?.hasVeggie),
+        hasStarCrust: Boolean(dishSpec?.hasStarCrust),
         cookState: 'raw',
         bakeProgress: 0,
       });
@@ -1891,12 +2452,15 @@ export function createPizzeriaScene(canvasEl, callbacks = {}) {
         const k = String(spec.kind || spec.type);
         if (k.includes('pep')) kind = 'pepperoni';
         else if (k.includes('veg')) kind = 'veggie';
+        else if (k.includes('star')) kind = 'star_crust';
         else if (k.includes('oven') || k.includes('pizza')) kind = 'oven_slide';
         else kind = 'dough';
       } else if (fromStationId === 'topping_pepperoni') {
         kind = 'pepperoni';
       } else if (fromStationId === 'topping_veggie') {
         kind = 'veggie';
+      } else if (fromStationId === 'star_crust') {
+        kind = 'star_crust';
       } else if (String(toStationId || '').startsWith('oven')) {
         kind = 'oven_slide';
       }
@@ -1927,7 +2491,11 @@ export function createPizzeriaScene(canvasEl, callbacks = {}) {
     if (typeof toSlotIndex === 'string' && !toSlotIndex.startsWith('customer_') && !toSlotIndex.startsWith('slot_')) {
       const kind = fromStationId === 'topping_pepperoni'
         ? 'pepperoni'
-        : (fromStationId === 'topping_veggie' ? 'veggie' : (String(toSlotIndex).startsWith('oven') ? 'oven_slide' : 'dough'));
+        : (fromStationId === 'topping_veggie'
+          ? 'veggie'
+          : (fromStationId === 'star_crust'
+            ? 'star_crust'
+            : (String(toSlotIndex).startsWith('oven') ? 'oven_slide' : 'dough')));
       spawnFlyingIngredient(fromStationId, toSlotIndex, kind, dishSpec);
       return;
     }
@@ -1945,14 +2513,25 @@ export function createPizzeriaScene(canvasEl, callbacks = {}) {
 
     triggerStationBounce(fromStationId);
 
+    const isGelato =
+      dishSpec?.type === 'gelato_sundae' ||
+      dishSpec?.recipe === 'gelato_sundae' ||
+      Boolean(dishSpec?.isGelato) ||
+      fromStationId === 'gelato_station';
+
     const isJuice =
-      dishSpec?.type === 'mango_juice' ||
-      dishSpec?.recipe === 'mango_juice' ||
-      Boolean(dishSpec?.isJuice) ||
-      String(fromStationId || '').startsWith('juice');
+      !isGelato &&
+      (dishSpec?.type === 'mango_juice' ||
+        dishSpec?.recipe === 'mango_juice' ||
+        Boolean(dishSpec?.isJuice) ||
+        String(fromStationId || '').startsWith('juice'));
 
     let meshRoot;
-    if (isJuice) {
+    if (isGelato) {
+      const gelato = build3DGelatoAssembly();
+      gelato.setGelatoLook('topped');
+      meshRoot = gelato.root;
+    } else if (isJuice) {
       const cup = build3DJuiceCupAssembly();
       cup.setFillProgress(1.0, true);
       meshRoot = cup.root;
@@ -1962,6 +2541,7 @@ export function createPizzeriaScene(canvasEl, callbacks = {}) {
       pizza.setPizzaLook({
         hasPepperoni: Boolean(dishSpec?.hasPepperoni || recipe === 'pepperoni_pizza' || recipe === 'supreme_pizza'),
         hasVeggie: Boolean(dishSpec?.hasVeggie || recipe === 'supreme_pizza'),
+        hasStarCrust: Boolean(dishSpec?.hasStarCrust),
         cookState: 'baked',
         bakeProgress: 1.0,
       });
@@ -2183,6 +2763,95 @@ export function createPizzeriaScene(canvasEl, callbacks = {}) {
   function render(state = {}, dt = 0.016, t = 0) {
     const safeDt = Math.max(0.001, Math.min(0.1, Number(dt) || 0.016));
     const safeT = Number(t) || 0;
+    const wave = Math.max(1, Math.min(3, Number(state.wave) || 1));
+
+    // Pillar 3: Wave 1 / 2 / 3 Progressive Trattoria Evolution & Lighting
+    wave1PropsGroup.visible = true;
+    wave2PropsGroup.visible = wave >= 2;
+    wave3PropsGroup.visible = wave >= 3;
+    if (spinningPizzaEmblem && wave >= 2) {
+      spinningPizzaEmblem.rotation.z = safeT * 1.35;
+    }
+    if (wave >= 3 && wave3Sparkles.length > 0) {
+      for (let i = 0; i < wave3Sparkles.length; i++) {
+        const sp = wave3Sparkles[i];
+        const basePos = sp.userData?.basePos;
+        const phase = sp.userData?.phase || 0;
+        if (basePos) {
+          sp.position.y = basePos.y + Math.sin(safeT * 3.2 + phase) * 0.16;
+        }
+        sp.rotation.y = safeT * 2.4 + phase;
+      }
+    }
+
+    if (!state.partyFeverActive) {
+      if (wave === 1) {
+        scene.background.setHex(0xfaf3eb);
+        if (scene.fog) scene.fog.color.setHex(0xfaf3eb);
+        hemiLight.color.setHex(0xfff8ee);
+        hemiLight.groundColor.setHex(0xd9a773);
+        hemiLight.intensity = 1.25;
+        dirLight.color.setHex(0xfff2d6);
+        dirLight.intensity = 1.45;
+        fillLight.color.setHex(0xffe5c4);
+        fillLight.intensity = 0.65;
+      } else if (wave === 2) {
+        scene.background.setHex(0xffe5cc);
+        if (scene.fog) scene.fog.color.setHex(0xffe5cc);
+        hemiLight.color.setHex(0xfff0db);
+        hemiLight.groundColor.setHex(0xe89968);
+        hemiLight.intensity = 1.32;
+        dirLight.color.setHex(0xffd09b);
+        dirLight.intensity = 1.55;
+        fillLight.color.setHex(0xffb703);
+        fillLight.intensity = 0.78;
+      } else {
+        scene.background.setHex(0xf9d8ff);
+        if (scene.fog) scene.fog.color.setHex(0xf9d8ff);
+        hemiLight.color.setHex(0xfff4ff);
+        hemiLight.groundColor.setHex(0xd09cf4);
+        hemiLight.intensity = 1.38;
+        dirLight.color.setHex(0xffe8b6);
+        dirLight.intensity = 1.62;
+        fillLight.color.setHex(0xffbe0b);
+        fillLight.intensity = 0.88;
+      }
+    }
+
+    // Pillar 1: Animate Gelato Bar & Star-Crust Glaze Station
+    if (gelatoCtrl) {
+      const gSt = state.gelatoState || 'empty';
+      gelatoCtrl.gelatoCupAssembly.setGelatoLook(gSt);
+      gelatoCtrl.wave2SprinkleJars.visible = wave >= 2;
+      gelatoCtrl.wave3FountainTower.visible = wave >= 3;
+      if (gelatoCtrl.fountainStarTop) {
+        gelatoCtrl.fountainStarTop.rotation.y = safeT * 2.2;
+      }
+      if (gSt === 'swirled' || gSt === 'topped') {
+        const gPulse = 1.0 + 0.05 * Math.sin(safeT * 7.0);
+        gelatoCtrl.gelatoCupAssembly.root.scale.set(gPulse, 1.0, gPulse);
+        if (gelatoCtrl.gelatoHalo) {
+          gelatoCtrl.gelatoHalo.material.opacity = 0.45 + 0.25 * Math.sin(safeT * 7.0);
+          gelatoCtrl.gelatoHalo.material.color.setHex(gSt === 'topped' ? 0xffbe0b : 0xff4d94);
+        }
+      } else {
+        gelatoCtrl.gelatoCupAssembly.root.scale.set(1, 1, 1);
+        if (gelatoCtrl.gelatoHalo) {
+          gelatoCtrl.gelatoHalo.material.opacity = 0.18 + 0.08 * Math.sin(safeT * 4.0);
+          gelatoCtrl.gelatoHalo.material.color.setHex(0xff8fab);
+        }
+      }
+    }
+
+    if (starCrustCtrl) {
+      if (starCrustCtrl.orbitStarsGroup) {
+        starCrustCtrl.orbitStarsGroup.rotation.y = safeT * 1.85;
+        starCrustCtrl.orbitStarsGroup.position.y = 0.62 + Math.sin(safeT * 4.5) * 0.03;
+      }
+      if (starCrustCtrl.starHalo) {
+        starCrustCtrl.starHalo.material.opacity = 0.38 + 0.22 * Math.sin(safeT * 5.5);
+      }
+    }
 
     if (trauma > 0) {
       trauma = Math.max(0, trauma - safeDt * 3.5);
@@ -2256,6 +2925,7 @@ export function createPizzeriaScene(canvasEl, callbacks = {}) {
         bState.hasVeggie ||
         bState.recipe === 'supreme_pizza'
       );
+      const hasStarCrust = Boolean(bState.hasStarCrust);
 
       // Detect ingredient additions to auto-spawn 0.25s mini-arc flights
       if (hasPizza && !ctrl.prevDough) {
@@ -2269,7 +2939,7 @@ export function createPizzeriaScene(canvasEl, callbacks = {}) {
       ctrl.prevPep = hasPizza && hasPep;
       ctrl.prevVeg = hasPizza && hasVeg;
 
-      const sig = hasPizza ? `1:${hasPep ? 1 : 0}:${hasVeg ? 1 : 0}` : 'empty';
+      const sig = hasPizza ? `1:${hasPep ? 1 : 0}:${hasVeg ? 1 : 0}:${hasStarCrust ? 1 : 0}` : 'empty';
       if (sig !== ctrl.lastSignature) {
         if (hasPizza) {
           ctrl.springPop = 1.0;
@@ -2282,6 +2952,7 @@ export function createPizzeriaScene(canvasEl, callbacks = {}) {
         ctrl.pizzaAssembly.setPizzaLook({
           hasPepperoni: hasPep,
           hasVeggie: hasVeg,
+          hasStarCrust,
           cookState: 'raw',
           bakeProgress: 0,
         });
@@ -2315,11 +2986,13 @@ export function createPizzeriaScene(canvasEl, callbacks = {}) {
         oState.hasVeggie ||
         oState.recipe === 'supreme_pizza'
       );
+      const hasStarCrust = Boolean(oState.hasStarCrust);
 
       if (st === 'baking' && ctrl.prevState === 'empty') {
         spawnFlyingIngredient(`prep_board_${idx}`, ctrl.id, 'oven_slide', {
           hasPepperoni: hasPep,
           hasVeggie: hasVeg,
+          hasStarCrust,
         });
       }
       ctrl.prevState = st;
@@ -2331,6 +3004,7 @@ export function createPizzeriaScene(canvasEl, callbacks = {}) {
         ctrl.pizzaAssembly.setPizzaLook({
           hasPepperoni: hasPep,
           hasVeggie: hasVeg,
+          hasStarCrust,
           cookState: st,
           bakeProgress: bakeP,
         });
@@ -2520,6 +3194,11 @@ export function createPizzeriaScene(canvasEl, callbacks = {}) {
         p.mesh.scale.setScalar(Math.max(0.15, s * 1.5));
       }
     }
+
+    if (helperAndEventsCtrl && typeof helperAndEventsCtrl.syncHelperAndEvents === 'function') {
+      helperAndEventsCtrl.syncHelperAndEvents(state, safeDt, safeT);
+    }
+    enforceNonIblMaterialHygiene(scene);
 
     renderer.render(scene, camera);
   }

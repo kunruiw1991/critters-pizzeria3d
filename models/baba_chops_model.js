@@ -142,7 +142,7 @@ export function buildBabaChopsPlushModel(THREE) {
       name: 'Baba_Silver_Zipper_Hardware',
       color: 0xc8cdd6,
       roughness: 0.28,
-      metalness: 0.80
+      metalness: 0.22
     }),
     seamDark: new THREE.MeshStandardMaterial({
       name: 'Baba_Plush_Seam_Groove',

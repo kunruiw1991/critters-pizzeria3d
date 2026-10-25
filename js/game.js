@@ -1,11 +1,39 @@
 import { createPizzeriaScene } from './scene3d.js';
 import { PizzeriaAudio } from './audio.js';
+import {
+  createHelperAndEventsState,
+  stepHelperAndEvents,
+  triggerHelperBuddyTap,
+  triggerPartyFeverEvent,
+} from './helper_and_events.js';
 
 const CHEF_POOL = ['catnap', 'dogday', 'craftycorn', 'hoppy', 'picky', 'bubba', 'kickin'];
 const RIVAL_SCORES_BY_WAVE = {
   1: [220, 165, 110, 55],
   2: [285, 215, 145, 75],
   3: [315, 240, 165, 85],
+};
+
+const WAVE_THEMES = {
+  1: 'morning_trattoria',
+  2: 'sunset_fiesta',
+  3: 'starlight_gala',
+};
+
+const WAVE_PROPS = {
+  1: ['gelato_station', 'star_crust', 'helper_buddy', 'trattoria_herbs'],
+  2: ['gelato_station', 'star_crust', 'helper_buddy', 'trattoria_herbs', 'fiesta_lantern_arch', 'sprinkle_jars'],
+  3: [
+    'gelato_station',
+    'star_crust',
+    'helper_buddy',
+    'trattoria_herbs',
+    'fiesta_lantern_arch',
+    'sprinkle_jars',
+    'starlight_trophy_columns',
+    'gelato_fountain_tower',
+    'spinning_pizza_emblem',
+  ],
 };
 
 function getWaveRivalScores(wave = 1) {
@@ -45,6 +73,7 @@ const BASE_COINS = {
   pepperoni_pizza: 35,
   supreme_pizza: 45,
   mango_juice: 15,
+  gelato_sundae: 20,
 };
 
 const BAKE_DURATION = 3.0;
@@ -106,6 +135,7 @@ function createEmptyBoard(index) {
     hasCheese: false,
     hasPepperoni: false,
     hasVeggie: false,
+    hasStarCrust: false,
     recipe: null,
     popTimer: 0,
   };
@@ -121,6 +151,7 @@ function createEmptyOven(index) {
     hasCheese: false,
     hasPepperoni: false,
     hasVeggie: false,
+    hasStarCrust: false,
     recipe: null,
     bakeProgress: 0,
     burnProgress: 0,
@@ -196,6 +227,11 @@ const state = {
   juices: [createJuiceCup(0, 1.0), createJuiceCup(1, 1.0)],
   customers: [null, null, null],
   slotChompTimers: [0, 0, 0],
+  gelatoState: 'empty',
+  gelatoServedCount: 0,
+  starCrustCount: 0,
+  partyFeverTriggeredForStreak: false,
+  ...createHelperAndEventsState(),
   waveDone: false,
   rank: 5,
   stars: 0,
@@ -415,6 +451,7 @@ function handleDoughTrayTap(targetBoardIndex = null) {
   board.hasCheese = true;
   board.hasPepperoni = false;
   board.hasVeggie = false;
+  board.hasStarCrust = false;
   board.recipe = 'cheese_pizza';
   board.popTimer = 0.35;
 
@@ -474,6 +511,163 @@ function handleToppingVeggieTap(targetBoardIndex = null) {
   return true;
 }
 
+export function applyStarCrust(targetStationId = null) {
+  safeAudio('init');
+  let targetBoard = null;
+  let targetOven = null;
+
+  if (targetStationId === 'prep_board_0' || targetStationId === 'prep_board_1') {
+    const bIdx = targetStationId === 'prep_board_0' ? 0 : 1;
+    if (state.prepBoards[bIdx] && state.prepBoards[bIdx].hasDough) {
+      targetBoard = state.prepBoards[bIdx];
+    }
+  } else if (targetStationId === 'oven_0' || targetStationId === 'oven_1') {
+    const oIdx = targetStationId === 'oven_0' ? 0 : 1;
+    const o = state.ovens[oIdx];
+    if (o && (o.state === 'baking' || o.state === 'baked')) {
+      targetOven = o;
+    }
+  }
+
+  if (!targetBoard && !targetOven) {
+    targetBoard = state.prepBoards.find((b) => b.hasDough && !b.hasStarCrust) || null;
+  }
+  if (!targetBoard && !targetOven) {
+    targetOven =
+      state.ovens.find((o) => (o.state === 'baking' || o.state === 'baked') && !o.hasStarCrust) || null;
+  }
+  if (!targetBoard && !targetOven) {
+    targetBoard = state.prepBoards.find((b) => b.hasDough) || null;
+  }
+  if (!targetBoard && !targetOven) {
+    targetOven = state.ovens.find((o) => o.state === 'baking' || o.state === 'baked') || null;
+  }
+
+  // If no pizza is on any board or oven yet, auto-place dough on prep_board_0 and glaze it!
+  if (!targetBoard && !targetOven) {
+    handleDoughTrayTap(0);
+    targetBoard = state.prepBoards[0];
+  }
+
+  const destId = targetBoard ? targetBoard.id : targetOven.id;
+  if (targetBoard) {
+    targetBoard.hasStarCrust = true;
+    targetBoard.popTimer = 0.35;
+  } else if (targetOven) {
+    targetOven.hasStarCrust = true;
+  }
+
+  state.starCrustCount += 1;
+  triggerMiniArcFlight('star_crust', destId, { type: 'star_crust', kind: 'star_crust' });
+  safeAudio('playStarCrustSparkle');
+  syncHud();
+  renderSceneFrame(0.016);
+  return true;
+}
+
+export function serveGelato(targetSlotIndex = null, fromStationTap = false) {
+  safeAudio('init');
+
+  if (fromStationTap) {
+    if (state.gelatoState === 'empty') {
+      state.gelatoState = 'swirled';
+      if (sceneApi && typeof sceneApi.triggerStationBounce === 'function') {
+        sceneApi.triggerStationBounce('gelato_station');
+      }
+      safeAudio('playGelatoSwirl', 1);
+      syncHud();
+      renderSceneFrame(0.016);
+      return true;
+    }
+    if (state.gelatoState === 'swirled') {
+      state.gelatoState = 'topped';
+      if (sceneApi && typeof sceneApi.triggerStationBounce === 'function') {
+        sceneApi.triggerStationBounce('gelato_station');
+      }
+      safeAudio('playGelatoSwirl', 2);
+      syncHud();
+      renderSceneFrame(0.016);
+      return true;
+    }
+  }
+
+  // Serve the topped gelato sundae to the target or lowest-patience waiting customer
+  const candidates =
+    targetSlotIndex !== null && state.customers[targetSlotIndex]
+      ? [state.customers[targetSlotIndex]]
+      : state.customers.filter((c) => c !== null && c.mood === 'waiting');
+
+  const targetCust =
+    candidates.length > 0
+      ? [...candidates].sort((a, b) => a.patience - b.patience)[0]
+      : state.customers.find((c) => c !== null) || null;
+
+  const slotIdx = targetCust ? targetCust.slotIndex : 0;
+  if (targetCust) {
+    targetCust.patience = Math.min(targetCust.maxPatience, targetCust.patience + 6.0);
+    targetCust.patienceRatio = targetCust.patience / targetCust.maxPatience;
+  }
+
+  const bonusCoins = 20 + (state.partyFeverActive ? 15 : 0);
+  state.coins += bonusCoins;
+  state.gelatoServedCount += 1;
+  state.gelatoState = 'empty';
+
+  if (sceneApi) {
+    if (typeof sceneApi.spawnFlyingFood === 'function') {
+      sceneApi.spawnFlyingFood('gelato_station', slotIdx, {
+        type: 'gelato_sundae',
+        recipe: 'gelato_sundae',
+        isGelato: true,
+      });
+    }
+    if (typeof sceneApi.spawnHeartBurst === 'function') {
+      sceneApi.spawnHeartBurst(slotIdx);
+    }
+    if (typeof sceneApi.spawnCoinBurst === 'function') {
+      sceneApi.spawnCoinBurst(slotIdx, 3);
+    }
+  }
+
+  safeAudio('playGelatoSwirl', 3);
+  safeAudio('playCoinJingle', 3);
+  pulseCoinEmblem();
+  syncHud();
+  renderSceneFrame(0.016);
+  return true;
+}
+
+export function tapHelperBuddy() {
+  safeAudio('init');
+  const res = triggerHelperBuddyTap(state, PizzeriaAudio || window.PizzeriaAudio, {
+    onHelperRescue: (oven) => {
+      if (sceneApi && typeof sceneApi.triggerStationBounce === 'function') {
+        sceneApi.triggerStationBounce(oven.id);
+      }
+    },
+    onHelperServe: (fromId, slotIdx) => {
+      if (sceneApi && typeof sceneApi.spawnCoinBurst === 'function') {
+        sceneApi.spawnCoinBurst(slotIdx, 2);
+      }
+    },
+  });
+  if (sceneApi && typeof sceneApi.triggerStationBounce === 'function') {
+    sceneApi.triggerStationBounce('helper_buddy');
+  }
+  pulseCoinEmblem();
+  syncHud();
+  renderSceneFrame(0.016);
+  return res;
+}
+
+export function triggerPartyFever() {
+  safeAudio('init');
+  const res = triggerPartyFeverEvent(state, PizzeriaAudio || window.PizzeriaAudio);
+  syncHud();
+  renderSceneFrame(0.016);
+  return res;
+}
+
 function slideBoardToOven(boardIndex, preferredOvenIndex = null) {
   safeAudio('init');
   const board = state.prepBoards[boardIndex];
@@ -493,6 +687,7 @@ function slideBoardToOven(boardIndex, preferredOvenIndex = null) {
   oven.hasCheese = true;
   oven.hasPepperoni = board.hasPepperoni;
   oven.hasVeggie = board.hasVeggie;
+  oven.hasStarCrust = Boolean(board.hasStarCrust);
   oven.recipe = computeBoardRecipe(board);
   oven.bakeProgress = 0;
   oven.burnProgress = 0;
@@ -503,6 +698,7 @@ function slideBoardToOven(boardIndex, preferredOvenIndex = null) {
     recipe: oven.recipe,
     hasPepperoni: oven.hasPepperoni,
     hasVeggie: oven.hasVeggie,
+    hasStarCrust: oven.hasStarCrust,
   });
 
   // Reset prep board
@@ -512,6 +708,7 @@ function slideBoardToOven(boardIndex, preferredOvenIndex = null) {
   board.hasCheese = false;
   board.hasPepperoni = false;
   board.hasVeggie = false;
+  board.hasStarCrust = false;
   board.recipe = null;
   board.popTimer = 0;
 
@@ -519,14 +716,18 @@ function slideBoardToOven(boardIndex, preferredOvenIndex = null) {
   return true;
 }
 
-function deliverItemToCustomer(fromStationId, slotIndex, orderItem, dishType) {
+function deliverItemToCustomer(fromStationId, slotIndex, orderItem, dishType, extraSpec = {}) {
   const cust = state.customers[slotIndex];
   if (!cust) return false;
 
   orderItem.done = true;
   orderItem.satisfied = true;
 
-  const itemCoins = BASE_COINS[orderItem.type] || BASE_COINS[dishType] || 25;
+  const hasStarCrust = Boolean(extraSpec?.hasStarCrust);
+  const itemCoins =
+    (BASE_COINS[orderItem.type] || BASE_COINS[dishType] || 25) +
+    (hasStarCrust ? 15 : 0) +
+    (state.partyFeverActive ? 15 : 0);
   state.coins += itemCoins;
 
   const dishSpec = {
@@ -539,6 +740,7 @@ function deliverItemToCustomer(fromStationId, slotIndex, orderItem, dishType) {
     hasCheese: dishType !== 'mango_juice',
     hasPepperoni: dishType === 'pepperoni_pizza' || dishType === 'supreme_pizza',
     hasVeggie: dishType === 'supreme_pizza',
+    hasStarCrust,
   };
 
   if (sceneApi && typeof sceneApi.spawnFlyingFood === 'function') {
@@ -564,8 +766,15 @@ function deliverItemToCustomer(fromStationId, slotIndex, orderItem, dishType) {
     state.combo = Math.min(4, state.combo + 1);
   } else {
     state.combo = 1;
+    state.partyFeverTriggeredForStreak = false;
   }
   state.comboTimer = COMBO_WINDOW;
+
+  // Trigger Trattoria Party Fever automatically when reaching a 3x combo streak!
+  if (state.combo >= 3 && !state.partyFeverTriggeredForStreak) {
+    state.partyFeverTriggeredForStreak = true;
+    triggerPartyFeverEvent(state, PizzeriaAudio || window.PizzeriaAudio);
+  }
 
   const comboBonus = 5 * (state.combo - 1);
   state.coins += comboBonus;
@@ -617,6 +826,7 @@ function handleOvenTap(ovenIndex, targetSlotIndex = null) {
   }
 
   const bakedRecipe = oven.recipe || 'cheese_pizza';
+  const hadStarCrust = Boolean(oven.hasStarCrust);
 
   // Find matching customer
   let matchedCust = null;
@@ -649,7 +859,9 @@ function handleOvenTap(ovenIndex, targetSlotIndex = null) {
   }
 
   clearOven(oven);
-  return deliverItemToCustomer(`oven_${ovenIndex}`, matchedCust.slotIndex, matchedItem, bakedRecipe);
+  return deliverItemToCustomer(`oven_${ovenIndex}`, matchedCust.slotIndex, matchedItem, bakedRecipe, {
+    hasStarCrust: hadStarCrust,
+  });
 }
 
 function clearOven(oven) {
@@ -659,6 +871,7 @@ function clearOven(oven) {
   oven.hasCheese = false;
   oven.hasPepperoni = false;
   oven.hasVeggie = false;
+  oven.hasStarCrust = false;
   oven.recipe = null;
   oven.bakeProgress = 0;
   oven.burnProgress = 0;
@@ -701,6 +914,7 @@ function handleTrashBinTap() {
     occupiedBoard.hasCheese = false;
     occupiedBoard.hasPepperoni = false;
     occupiedBoard.hasVeggie = false;
+    occupiedBoard.hasStarCrust = false;
     occupiedBoard.recipe = null;
     safeAudio('playBurnPoof');
     return true;
@@ -737,7 +951,7 @@ function handleJuiceTap(juiceIndex, targetSlotIndex = null) {
     treatCust.bonusJuiceGiven = true;
     treatCust.patience = Math.min(treatCust.maxPatience, treatCust.patience + 5.0);
     treatCust.patienceRatio = treatCust.patience / treatCust.maxPatience;
-    state.coins += 10;
+    state.coins += 10 + (state.partyFeverActive ? 15 : 0);
 
     cup.fillProgress = 0;
     cup.ready = false;
@@ -776,6 +990,11 @@ function handleCustomerTap(slotIndex) {
   const cust = state.customers[slotIndex];
   if (!cust || cust.mood !== 'waiting') return false;
 
+  // Check if a topped Gelato Sundae is waiting to be served
+  if (state.gelatoState === 'topped') {
+    return serveGelato(slotIndex, false);
+  }
+
   // Check if any baked oven matches what this customer needs
   const neededPizza = cust.order.find((it) => !it.done && !it.isJuice);
   if (neededPizza) {
@@ -810,6 +1029,15 @@ export function tapStation(stationId) {
       break;
     case 'topping_veggie':
       acted = handleToppingVeggieTap();
+      break;
+    case 'star_crust':
+      acted = applyStarCrust();
+      break;
+    case 'gelato_station':
+      acted = serveGelato(null, true);
+      break;
+    case 'helper_buddy':
+      acted = tapHelperBuddy();
       break;
     case 'prep_board_0':
       acted = slideBoardToOven(0);
@@ -879,6 +1107,10 @@ export function dragStation(fromStationId, toStationId) {
     acted = handleToppingPepperoniTap(targetBoardIdx);
   } else if (fromStationId === 'topping_veggie' && targetBoardIdx !== null) {
     acted = handleToppingVeggieTap(targetBoardIdx);
+  } else if (fromStationId === 'star_crust' && (targetBoardIdx !== null || targetOvenIdx !== null)) {
+    acted = applyStarCrust(toStationId);
+  } else if (fromStationId === 'gelato_station' && targetSlotIdx !== null) {
+    acted = serveGelato(targetSlotIdx, false);
   } else if ((fromStationId === 'prep_board_0' || fromStationId === 'prep_board_1') && targetOvenIdx !== null) {
     const bIdx = fromStationId === 'prep_board_0' ? 0 : 1;
     acted = slideBoardToOven(bIdx, targetOvenIdx);
@@ -903,6 +1135,7 @@ export function dragStation(fromStationId, toStationId) {
       b.hasCheese = false;
       b.hasPepperoni = false;
       b.hasVeggie = false;
+      b.hasStarCrust = false;
       b.recipe = null;
       safeAudio('playBurnPoof');
       acted = true;
@@ -926,6 +1159,7 @@ function advanceSingleStep(dt) {
     state.comboTimer = Math.max(0, state.comboTimer - dt);
     if (state.comboTimer === 0) {
       state.combo = 0;
+      state.partyFeverTriggeredForStreak = false;
     }
   }
 
@@ -936,7 +1170,7 @@ function advanceSingleStep(dt) {
     }
   }
 
-  // 3. Update brick ovens (3.0s bake -> 7.5s burn window)
+  // 3. Update brick ovens (3.0s bake -> 7.5s burn window) & Helper Buddy auto-rescue
   for (const oven of state.ovens) {
     if (oven.state === 'baking') {
       oven.bakeProgress += dt / BAKE_DURATION;
@@ -949,6 +1183,25 @@ function advanceSingleStep(dt) {
       }
     } else if (oven.state === 'baked') {
       oven.burnProgress += dt / BURN_DURATION;
+    }
+  }
+
+  // Step Helper Buddy (KickinChicken auto-rescues any baked oven with burnProgress >= 0.62) & Party Fever timer
+  stepHelperAndEvents(
+    state,
+    dt,
+    {
+      onHelperRescue: (oven) => {
+        if (sceneApi && typeof sceneApi.triggerStationBounce === 'function') {
+          sceneApi.triggerStationBounce(oven.id);
+        }
+      },
+    },
+    PizzeriaAudio || window.PizzeriaAudio
+  );
+
+  for (const oven of state.ovens) {
+    if (oven.state === 'baked') {
       if (oven.burnProgress >= 0.65 && !oven.warnedBurn) {
         oven.warnedBurn = true;
         safeAudio('playBurnWarning');
@@ -958,6 +1211,7 @@ function advanceSingleStep(dt) {
         oven.state = 'burned';
         state.combo = 0;
         state.comboTimer = 0;
+        state.partyFeverTriggeredForStreak = false;
         state.coins = Math.max(0, state.coins - 15);
         for (const cust of state.customers) {
           if (cust && cust.mood === 'waiting') {
@@ -983,7 +1237,7 @@ function advanceSingleStep(dt) {
     }
   }
 
-  // 5. Update slot chomp timers & customer patience
+  // 5. Update slot chomp timers & customer patience (frozen during Party Fever!)
   for (let i = 0; i < 3; i++) {
     if (state.slotChompTimers[i] > 0) {
       state.slotChompTimers[i] = Math.max(0, state.slotChompTimers[i] - dt);
@@ -997,13 +1251,16 @@ function advanceSingleStep(dt) {
     }
 
     if (cust.mood === 'waiting') {
-      cust.patience = Math.max(0, cust.patience - dt);
+      if (!state.partyFeverActive) {
+        cust.patience = Math.max(0, cust.patience - dt);
+      }
       cust.patienceRatio = cust.patience / cust.maxPatience;
 
       if (cust.patience <= 0) {
         // Customer timed out!
         state.combo = 0;
         state.comboTimer = 0;
+        state.partyFeverTriggeredForStreak = false;
         state.coins = Math.max(0, state.coins - 10);
         state.customersMissed += 1;
         state.customersProcessed += 1;
@@ -1053,6 +1310,11 @@ export function resetWave(waveNum = state.wave) {
   state.stars = 0;
   state.elapsed = 0;
   state.slotChompTimers = [0, 0, 0];
+  state.gelatoState = 'empty';
+  state.gelatoServedCount = 0;
+  state.starCrustCount = 0;
+  state.partyFeverTriggeredForStreak = false;
+  Object.assign(state, createHelperAndEventsState());
 
   state.prepBoards = [createEmptyBoard(0), createEmptyBoard(1)];
   state.ovens = [createEmptyOven(0), createEmptyOven(1)];
@@ -1112,6 +1374,8 @@ export function getState() {
     rivalCritters,
     wave: state.wave,
     maxWaves: state.maxWaves,
+    waveTheme: WAVE_THEMES[state.wave] || 'morning_trattoria',
+    activeWaveProps: WAVE_PROPS[state.wave] || WAVE_PROPS[1],
     coins: state.coins,
     combo: state.combo,
     comboTimer: state.comboTimer,
@@ -1127,6 +1391,16 @@ export function getState() {
     recommendedStationId,
     recommendedStation: recommendedStationId,
     recommendedStations: recommendedStationId ? [recommendedStationId] : [],
+    gelatoState: state.gelatoState,
+    gelatoServedCount: state.gelatoServedCount,
+    starCrustCount: state.starCrustCount,
+    helperState: state.helperState,
+    helperCooldown: state.helperCooldown,
+    helperAssists: state.helperAssists,
+    helperTargetId: state.helperTargetId,
+    partyFeverActive: Boolean(state.partyFeverActive),
+    partyFeverTimer: state.partyFeverTimer || 0,
+    partyFeverCount: state.partyFeverCount || 0,
     prepBoards: state.prepBoards,
     boards: state.prepBoards,
     prep_board_0: state.prepBoards[0],
@@ -1488,6 +1762,10 @@ window.PizzeriaGame = {
   resetWave,
   startNextWave,
   cyclePlayerChef,
+  serveGelato,
+  applyStarCrust,
+  tapHelperBuddy,
+  triggerPartyFever,
   getScene: () => sceneApi,
 };
 

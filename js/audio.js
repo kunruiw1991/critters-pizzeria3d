@@ -682,6 +682,158 @@ function playClick() {
   } catch (_) {}
 }
 
+/**
+ * Creamy soft-serve swirl sweep + ascending pentatonic kalimba chime for Gelato Sundae Station.
+ */
+function playGelatoSwirl(stepIndex = 0) {
+  if (muted || !canTrigger('gelatoSwirl', 20)) return;
+  const audioCtx = ensureContext();
+  if (!audioCtx || !masterGain) return;
+  try {
+    const t = audioCtx.currentTime;
+    const step = Math.max(0, Math.min(2, Math.floor(Number(stepIndex) || 0)));
+
+    // Creamy soft-serve dispenser swirl noise sweep
+    scheduleFilteredNoise(
+      audioCtx,
+      masterGain,
+      t,
+      0.22,
+      'bandpass',
+      460 + step * 180,
+      1180 + step * 260,
+      3.4,
+      0.19,
+      0.03
+    );
+
+    // Smooth rising sine swirl glide
+    const swirlOsc = audioCtx.createOscillator();
+    const swirlGain = audioCtx.createGain();
+    swirlOsc.type = 'sine';
+    swirlOsc.frequency.setValueAtTime(360 + step * 110, t);
+    swirlOsc.frequency.exponentialRampToValueAtTime(740 + step * 220, t + 0.18);
+    swirlGain.gain.setValueAtTime(0.0001, t);
+    swirlGain.gain.linearRampToValueAtTime(0.15, t + 0.025);
+    swirlGain.gain.exponentialRampToValueAtTime(0.001, t + 0.20);
+    swirlOsc.connect(swirlGain);
+    swirlGain.connect(masterGain);
+    swirlOsc.start(t);
+    swirlOsc.stop(t + 0.21);
+
+    // Ascending pentatonic kalimba chime (C5-E5-G5 or E5-G5-C6)
+    const chimeSets = [
+      [523.25, 659.25, 783.99],
+      [659.25, 783.99, 1046.50],
+      [783.99, 1046.50, 1318.51]
+    ];
+    const notes = chimeSets[step] || chimeSets[0];
+    notes.forEach((freq, idx) => {
+      scheduleKalimbaNote(audioCtx, masterGain, freq, t + 0.04 + idx * 0.055, 0.24, 0.20);
+    });
+  } catch (_) {}
+}
+
+/**
+ * Shimmering golden bell triad (C6 - E6 - G6 - C7) when crowning a pizza with Golden Honey-Star Crust.
+ */
+function playStarCrustSparkle() {
+  if (muted || !canTrigger('starCrustSparkle', 25)) return;
+  const audioCtx = ensureContext();
+  if (!audioCtx || !masterGain) return;
+  try {
+    const t = audioCtx.currentTime;
+    const triad = [1046.50, 1318.51, 1567.98, 2093.00]; // C6, E6, G6, C7
+    triad.forEach((freq, idx) => {
+      const start = t + idx * 0.048;
+      scheduleKalimbaNote(audioCtx, masterGain, freq, start, 0.34, 0.21);
+      // Shimmer overtone
+      scheduleKalimbaNote(audioCtx, masterGain, freq * 1.5, start + 0.015, 0.22, 0.09);
+    });
+  } catch (_) {}
+}
+
+/**
+ * Cheerful bouncy 3-note marimba riff when tapping the Sous-Chef Helper Buddy.
+ */
+function playHelperCheer() {
+  if (muted || !canTrigger('helperCheer', 30)) return;
+  const audioCtx = ensureContext();
+  if (!audioCtx || !masterGain) return;
+  try {
+    const t = audioCtx.currentTime;
+    // Bouncy 3-note marimba riff (G5 -> A5 -> C6 with warm fifth harmony)
+    const riff = [
+      { freq: 783.99, harm: 523.25, offset: 0.00, dur: 0.18 },
+      { freq: 880.00, harm: 587.33, offset: 0.085, dur: 0.18 },
+      { freq: 1046.50, harm: 659.25, offset: 0.17, dur: 0.32 }
+    ];
+    riff.forEach((note) => {
+      scheduleKalimbaNote(audioCtx, masterGain, note.freq, t + note.offset, note.dur, 0.24);
+      scheduleKalimbaNote(audioCtx, masterGain, note.harm, t + note.offset + 0.01, note.dur, 0.14);
+    });
+  } catch (_) {}
+}
+
+/**
+ * Gentle magic pizza-peel whoosh + crystal rescue chime when Sous-Chef Buddy prevents an oven burn.
+ */
+function playHelperRescue() {
+  if (muted || !canTrigger('helperRescue', 60)) return;
+  const audioCtx = ensureContext();
+  if (!audioCtx || !masterGain) return;
+  try {
+    const t = audioCtx.currentTime;
+    scheduleFilteredNoise(audioCtx, masterGain, t, 0.16, 'bandpass', 520, 1480, 2.5, 0.18, 0.02);
+    scheduleKalimbaNote(audioCtx, masterGain, 880.00, t + 0.02, 0.22, 0.20);
+    scheduleKalimbaNote(audioCtx, masterGain, 1174.66, t + 0.08, 0.28, 0.22);
+    scheduleKalimbaNote(audioCtx, masterGain, 1567.98, t + 0.14, 0.34, 0.20);
+  } catch (_) {}
+}
+
+/**
+ * Festive 5-note golden party fanfare when VIP Golden Pizza Party Fever triggers.
+ */
+function playPartyFeverFanfare() {
+  if (muted || !canTrigger('partyFeverFanfare', 80)) return;
+  const audioCtx = ensureContext();
+  if (!audioCtx || !masterGain) return;
+  try {
+    const t = audioCtx.currentTime;
+    // Festive 5-note ascending golden fanfare: C5 -> E5 -> G5 -> A5 -> C6 (+ octave shimmer)
+    const fanfareNotes = [
+      { freq: 523.25, offset: 0.00, dur: 0.18 },
+      { freq: 659.25, offset: 0.07, dur: 0.18 },
+      { freq: 783.99, offset: 0.14, dur: 0.18 },
+      { freq: 880.00, offset: 0.21, dur: 0.20 },
+      { freq: 1046.50, offset: 0.29, dur: 0.48 }
+    ];
+    fanfareNotes.forEach((n, idx) => {
+      const st = t + n.offset;
+      scheduleKalimbaNote(audioCtx, masterGain, n.freq, st, n.dur, 0.24);
+      scheduleKalimbaNote(audioCtx, masterGain, n.freq * 2, st + 0.012, n.dur * 0.85, 0.13);
+      if (idx === fanfareNotes.length - 1) {
+        // Warm brass pad on final tonic
+        const pad = audioCtx.createOscillator();
+        const lpf = audioCtx.createBiquadFilter();
+        const pg = audioCtx.createGain();
+        pad.type = 'sawtooth';
+        pad.frequency.setValueAtTime(523.25, st);
+        lpf.type = 'lowpass';
+        lpf.frequency.setValueAtTime(820, st);
+        pg.gain.setValueAtTime(0.0001, st);
+        pg.gain.linearRampToValueAtTime(0.08, st + 0.03);
+        pg.gain.exponentialRampToValueAtTime(0.0008, st + n.dur);
+        pad.connect(lpf);
+        lpf.connect(pg);
+        pg.connect(masterGain);
+        pad.start(st);
+        pad.stop(st + n.dur + 0.02);
+      }
+    });
+  } catch (_) {}
+}
+
 export const PizzeriaAudio = {
   init,
   setMuted,
@@ -700,7 +852,12 @@ export const PizzeriaAudio = {
   playCoinJingle,
   playCustomerAngry,
   playWaveResult,
-  playClick
+  playClick,
+  playGelatoSwirl,
+  playStarCrustSparkle,
+  playHelperCheer,
+  playHelperRescue,
+  playPartyFeverFanfare
 };
 
 if (typeof window !== 'undefined') {
@@ -725,7 +882,12 @@ export {
   playCoinJingle,
   playCustomerAngry,
   playWaveResult,
-  playClick
+  playClick,
+  playGelatoSwirl,
+  playStarCrustSparkle,
+  playHelperCheer,
+  playHelperRescue,
+  playPartyFeverFanfare
 };
 
 export default PizzeriaAudio;
